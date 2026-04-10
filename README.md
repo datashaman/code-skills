@@ -2,6 +2,20 @@
 
 A collection of Claude Code skills (slash commands) for software engineering workflows.
 
+## Installation
+
+Install any skill from this repo using [skills](https://skills.sh):
+
+```
+npx skills add https://github.com/datashaman/code-skills --skill <skillname>
+```
+
+For example:
+
+```
+npx skills add https://github.com/datashaman/code-skills --skill audit-codebase
+```
+
 ## Skills
 
 ### `/audit-codebase`

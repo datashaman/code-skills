@@ -32,6 +32,23 @@ Git-based codebase health audit. Runs five diagnostic git commands to identify c
 /audit-codebase path=src/api since="6 months ago"
 ```
 
+### `/audit-jira`
+
+Jira project health audit. Queries five dimensions of work item data to identify velocity trends, backlog rot, bug clusters, assignee concentration risk, and firefighting patterns — then cross-references findings to surface danger zones.
+
+**Prerequisites:** `acli` installed and authenticated (`acli jira auth`).
+
+**Arguments:**
+- `project` (required): Jira project key (e.g. `ENG`, `PLAT`)
+- `since` (optional): Start date for completed-work analysis (default: `2025-01-01`)
+- `sprint` (optional): Sprint name or ID to scope velocity analysis (default: last 6 sprints)
+
+**Usage:**
+```
+/audit-jira project=ENG
+/audit-jira project=PLAT since=2024-07-01
+```
+
 ## Other skills I like
 
 ### [`agent-ready-codebase`](https://skills.sh/casper-studios/casper-marketplace/agent-ready-codebase)

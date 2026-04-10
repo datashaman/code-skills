@@ -49,6 +49,23 @@ Jira project health audit. Queries five dimensions of work item data to identify
 /audit-jira ENG since=2024-07-01
 ```
 
+### `/audit-trello`
+
+Trello board health audit. Queries five dimensions of card data to identify throughput trends, backlog rot, blocker clusters, member concentration risk, and overdue patterns — then cross-references findings to surface danger zones.
+
+**Prerequisites:** `trello` CLI installed and authenticated (`trello auth`). Install from https://github.com/mheap/trello-cli.
+
+**Arguments:**
+- `board` (required): Trello board name or ID — can be passed positionally
+- `done` (optional): Name of the Done list (default: auto-detected)
+- `since` (optional): Cutoff date for age-based analysis (default: 1 year ago)
+
+**Usage:**
+```
+/audit-trello "My Board"
+/audit-trello board="My Board" since=2024-07-01
+```
+
 ## Other skills I like
 
 ### [`agent-ready-codebase`](https://skills.sh/casper-studios/casper-marketplace/agent-ready-codebase)

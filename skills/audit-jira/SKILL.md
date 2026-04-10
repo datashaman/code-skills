@@ -14,6 +14,29 @@ Query five dimensions of Jira data to build a picture of team health, backlog qu
 
 Uses `acli` (Atlassian CLI). Install at https://developer.atlassian.com/cloud/acli/ and authenticate with `acli jira auth` before running.
 
+## Steps
+
+### -1. Check prerequisites
+
+Before doing anything else, verify `acli` is installed and authenticated:
+
+```bash
+which acli
+acli jira whoami
+```
+
+If `which acli` fails, guide the user through installation:
+
+1. **macOS (Homebrew)**: `brew install atlassian/acli/acli`
+2. **Direct download**: Visit https://developer.atlassian.com/cloud/acli/ and download the binary for their platform, then move it to `/usr/local/bin/acli` and run `chmod +x /usr/local/bin/acli`
+
+Once installed, run `acli jira auth` and follow the prompts:
+- It will ask for their Atlassian site URL (e.g. `https://mycompany.atlassian.net`)
+- Then open a browser to generate an API token at https://id.atlassian.com/manage-profile/security/api-tokens
+- Paste the token when prompted
+
+Do not proceed until `acli jira whoami` returns successfully.
+
 ## Arguments
 
 - `project` (required): Jira project key (e.g. `ENG`, `PLAT`). Can be passed positionally as the first argument — `/audit-jira ENG` is equivalent to `/audit-jira project=ENG`.

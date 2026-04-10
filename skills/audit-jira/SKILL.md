@@ -16,7 +16,7 @@ Uses `acli` (Atlassian CLI). Install at https://developer.atlassian.com/cloud/ac
 
 ## Arguments
 
-- `project` (required): Jira project key (e.g. `ENG`, `PLAT`)
+- `project` (required): Jira project key (e.g. `ENG`, `PLAT`). Can be passed positionally as the first argument — `/audit-jira ENG` is equivalent to `/audit-jira project=ENG`.
 - `since` (optional): Start date for completed-work analysis in ISO format (default: `"1 year ago"`, expressed as a JQL date like `"-52w"`)
 - `board` (optional): Board ID to use for sprint analysis. If not provided, look it up via `acli jira board search --project $PROJECT --json`.
 

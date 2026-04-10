@@ -39,14 +39,14 @@ Jira project health audit. Queries five dimensions of work item data to identify
 **Prerequisites:** `acli` installed and authenticated (`acli jira auth`).
 
 **Arguments:**
-- `project` (required): Jira project key (e.g. `ENG`, `PLAT`)
+- `project` (required): Jira project key (e.g. `ENG`, `PLAT`) — can be passed positionally
 - `since` (optional): Start date for completed-work analysis (default: `2025-01-01`)
 - `sprint` (optional): Sprint name or ID to scope velocity analysis (default: last 6 sprints)
 
 **Usage:**
 ```
-/audit-jira project=ENG
-/audit-jira project=PLAT since=2024-07-01
+/audit-jira ENG
+/audit-jira ENG since=2024-07-01
 ```
 
 ## Other skills I like

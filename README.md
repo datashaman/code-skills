@@ -1,6 +1,6 @@
 # code-skills
 
-A collection of Claude Code skills (slash commands) for software engineering workflows.
+A collection of skills for software engineering workflows.
 
 ## Installation
 

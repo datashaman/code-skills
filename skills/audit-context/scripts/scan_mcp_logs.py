@@ -21,13 +21,38 @@ def find_log_root(home, slug):
     return None
 
 
+def load_user_configured_servers(home):
+    """Return the set of MCP server names the user has added to
+    ~/.claude.json (mcpServers). Anything NOT in this set and
+    appearing in the log dirs is a built-in (claude.ai *) server."""
+    path = os.path.join(home, ".claude.json")
+    if not os.path.isfile(path):
+        return set()
+    try:
+        with open(path) as f:
+            d = json.load(f)
+    except Exception:
+        return set()
+    names = set((d.get("mcpServers") or {}).keys())
+    # also per-project mcpServers
+    proj = d.get("projects", {}).get(os.getcwd(), {}) or {}
+    names.update((proj.get("mcpServers") or {}).keys())
+    return names
+
+
 def main():
     days = int(sys.argv[1]) if len(sys.argv) > 1 else 30
     home = os.path.expanduser("~")
     cwd = os.getcwd()
     slug = cwd.replace("/", "-")
     root = find_log_root(home, slug)
-    out = {"root": root, "servers": {}, "needs_auth": []}
+    user_configured = load_user_configured_servers(home)
+    out = {
+        "root": root,
+        "user_configured_servers": sorted(user_configured),
+        "servers": {},
+        "needs_auth": [],
+    }
 
     if root:
         cutoff = time.time() - days * 86400
@@ -50,11 +75,19 @@ def main():
                                 conn_fail += 1
                 except Exception:
                     pass
+            # Log dir names use dashes; user-configured names in
+            # ~/.claude.json may use dots/spaces. Normalize for lookup.
+            normalized = server.replace("-", "").replace(".", "").replace(" ", "").lower()
+            is_user_configured = any(
+                normalized == n.replace("-", "").replace(".", "").replace(" ", "").lower()
+                for n in user_configured
+            )
             out["servers"][server] = {
                 "sessions": len(files),
                 "errors": errors,
                 "connection_failures": conn_fail,
                 "broken": len(files) > 0 and conn_fail >= len(files),
+                "origin": "user" if is_user_configured else "builtin",
             }
 
     auth_cache = os.path.join(home, ".claude/mcp-needs-auth-cache.json")

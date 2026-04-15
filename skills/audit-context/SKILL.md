@@ -216,21 +216,31 @@ python3 "$SKILL_DIR/scripts/scan_mcp_logs.py" 30
 Same convention as `scan_jsonl.py` — substitute the skill's absolute
 base directory for `$SKILL_DIR`.
 
-Findings:
+Findings (script emits `origin: "user" | "builtin"` per server — use
+it to pick the right remediation):
 
-- **Broken MCP server** (`broken: true`). CRITICAL. Recommend removing
-  the entry or fixing the command/URL. Every session pays for its
+- **Broken user-configured server** (`broken: true`, `origin: user`).
+  CRITICAL. Remove via `claude mcp remove <name>` or delete the entry
+  from `~/.claude.json > mcpServers`. Every session pays for its
   tool schemas and gets nothing back.
+- **Broken built-in server** (`broken: true`, `origin: builtin`).
+  Rare — the claude.ai proxy transport usually connects cleanly.
+  Recommend toggling off via the `/mcp` slash command UI.
 - **Needs-auth MCP server.** Handling depends on origin:
-  - **Built-in `claude.ai *` servers** (Gmail, Google Calendar, Google
-    Drive) are shipped by claude.ai and cannot be removed per-server.
-    They can only be turned off as a group via the env var
-    `ENABLE_CLAUDEAI_MCP_SERVERS=false` (set in shell or under
-    `settings.json > env`). With Tool Search enabled (default), they
-    cost almost nothing when left unauthenticated — safe to ignore
-    unless the user explicitly never wants them. INFO, not WARNING.
+  - **Built-in `claude.ai *` servers** (Gmail, Calendar, Drive) can't
+    be removed per-server. Options: (a) ignore — with Tool Search
+    (default) they're nearly free when unauthenticated; (b) toggle
+    individual ones off via the `/mcp` slash command UI; (c) turn
+    the whole group off via env var `ENABLE_CLAUDEAI_MCP_SERVERS=false`
+    (shell or `settings.json > env`). INFO, not WARNING.
   - **User-configured servers** left unauthenticated are stale config:
-    recommend authenticating or removing. WARNING.
+    recommend authenticating or removing via
+    `claude mcp remove <name>`. WARNING.
+
+The canonical source of truth for user-configured servers is
+`~/.claude.json > mcpServers` (globally) and
+`~/.claude.json > projects[<cwd>] > mcpServers` (per-project). The
+scan script already reads both.
 
 ## Step 4: Score and Report
 
@@ -312,12 +322,15 @@ After the report:
 - Show a cleaned-up CLAUDE.md with flagged rules removed
 - Add missing settings.json configs
 - Add permissions.deny rules for build artifacts
-- Remove or fix broken user-configured MCP servers (those failing
-  every session)
+- Remove broken user-configured MCP servers — I'll run
+  `claude mcp remove <name>` for each, or show the
+  `~/.claude.json > mcpServers` diff
 - Disable unused user-configured MCP servers (set `disabled: true`) or
   narrow their tool allowlists
-- Turn off built-in claude.ai MCP servers (Gmail/Calendar/Drive) via
-  `ENABLE_CLAUDEAI_MCP_SERVERS=false` — all-or-nothing, not per-server
+- For built-in claude.ai servers (Gmail/Calendar/Drive): I can't
+  toggle individual ones from here, but you can turn each one off
+  interactively via `/mcp`, or disable the whole group by adding
+  `ENABLE_CLAUDEAI_MCP_SERVERS=false` to `settings.json > env`
 - Show which skills to compress or merge"
 
 Auto-apply settings.json and `permissions.deny` (safe, reversible).

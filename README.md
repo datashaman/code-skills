@@ -32,6 +32,15 @@ Git-based codebase health audit. Runs five diagnostic git commands to identify c
 /audit-codebase path=src/api since="6 months ago"
 ```
 
+### `/audit-context`
+
+Audit your Claude Code setup for token waste and context bloat. Starts from `/context` output, then audits MCP servers, CLAUDE.md rules, skills, settings, and file permissions. Mines session JSONL transcripts for behavioral signals (unused tools, cache hit rate, autocompact frequency) and returns a health score with specific fixes.
+
+**Usage:**
+```
+/audit-context
+```
+
 ### `/audit-jira`
 
 Jira project health audit. Queries five dimensions of work item data to identify velocity trends, backlog rot, bug clusters, assignee concentration risk, and firefighting patterns — then cross-references findings to surface danger zones.

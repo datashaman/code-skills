@@ -32,6 +32,22 @@ Git-based codebase health audit. Runs five diagnostic git commands to identify c
 /audit-codebase path=src/api since="6 months ago"
 ```
 
+### `/audit-design`
+
+Static design + WCAG accessibility audit for web UIs. Accepts a URL, a local directory of HTML/CSS/JSX/TSX/Vue/Svelte, or both (plan vs implementation). Every accessibility finding is mapped to a WCAG 2.1 success criterion and rolled up into a pass/fail matrix. Covers contrast ratios, color-only state signaling, semantic HTML structure (headings, landmarks, form labels, alt text, lang), microstandards (OpenGraph, JSON-LD, microdata, RDFa), Tailwind clusters that should be extracted via `@apply`, unhealthy component usage (divitis, clickable divs, inline styles, oversize JSX/TSX, repeated DOM structures), design hygiene (palette, typography, spacing scale, border-radius distribution), AI-slop patterns (purple-violet gradients, 3-col feature grids, icons in colored circles, centered everything, emoji in headings, placeholder copy), technical hygiene (outline:none, transition:all, viewport zoom-block, missing `<img>` dimensions, missing font-display), and a W3C HTML+CSS validator summary. Built for developers who can't eyeball visual problems (colorblindness, limited design experience).
+
+**Arguments:**
+- `url` (optional): Deployed URL to audit
+- `path` (optional): Local directory of source
+- At least one of `url` or `path` is required; pass both for plan-vs-implementation divergence mode
+
+**Usage:**
+```
+/audit-design url=https://example.com
+/audit-design path=./src
+/audit-design url=https://example.com path=./src
+```
+
 ### `/audit-context`
 
 Audit your Claude Code setup for token waste and context bloat. Starts from `/context` output, then audits MCP servers (user-configured and built-in `claude.ai *`), CLAUDE.md rules and `@imports`, skills, agents, slash commands, plugins, hooks, all five settings scopes (including managed / enterprise policy), and file permissions. Flags user-configured MCP servers that have well-known CLI equivalents (github→gh, aws→aws, kubernetes→kubectl, etc.) since a CLI costs zero tokens when idle. Mines session JSONL transcripts for behavioral signals (cache hit rate, autocompact frequency, turn-cost percentiles, per-tool error rates, unused skills/agents, repeated Read paths, large tool-result outliers). Cross-references MCP connection logs to catch broken servers that load schemas but never connect. Returns a health score with specific fixes.

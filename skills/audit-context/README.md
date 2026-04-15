@@ -39,7 +39,7 @@ None. The skill runs against the current project (uses `$PWD` to locate transcri
 | --------------------------- | ------------------------------------------------------------------------------------------- |
 | `SKILL.md`                  | Full agent instructions: audit steps, filters, report template                              |
 | `README.md`                 | This overview                                                                               |
-| `scripts/scan_configs.py`   | Inventories skills, agents, commands, plugins, CLAUDE.md (with `@imports`), `.mcp.json`, hooks, settings; emits JSON |
+| `scripts/scan_configs.py`   | Inventories skills, agents, commands, plugins, CLAUDE.md (with `@imports`), `.mcp.json`, hooks, all settings scopes (including managed), and matches user-configured MCP servers against a CLI-alternative registry (github→gh, aws→aws, kubernetes→kubectl, etc.); emits JSON |
 | `scripts/scan_jsonl.py`     | Streams `~/.claude/projects/<slug>/*.jsonl` and emits behavioural aggregates (cache hit, turn-cost percentiles, tool error rates, top Read paths, large tool-result outliers, Agent subagent types) |
 | `scripts/scan_mcp_logs.py`  | Parses `~/Library/Caches/claude-cli-nodejs/<slug>/mcp-logs-*/` to flag broken/stale servers, classified by origin (user-configured vs built-in `claude.ai *`) |
 

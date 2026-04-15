@@ -13,6 +13,74 @@ HOME = os.path.expanduser("~")
 CWD = os.getcwd()
 
 
+# Registry of MCP servers where a CLI alternative is usually a
+# better trade-off: zero token cost when idle, the agent only pays
+# for the specific command output it requests.
+#
+# Each entry matches by one or more of:
+#   - `name`: substrings to match against the MCP server name
+#     (case-insensitive)
+#   - `pkg`: substrings to match against the server's command/args
+#     (npm package names, docker images, URL hostnames)
+#
+# Match patterns are deliberately loose — a single hit flags the
+# server as a CLI-alternative candidate.
+CLI_ALTERNATIVES = [
+    {"name": ["github"], "pkg": ["server-github", "github-mcp"],
+     "cli": "gh", "reason": "GitHub MCP ships ~40+ tools. `gh` covers almost all of it (issues, PRs, workflows, releases, repos) at zero context cost when idle."},
+    {"name": ["gitlab"], "pkg": ["server-gitlab", "gitlab-mcp"],
+     "cli": "glab", "reason": "GitLab MCP is similarly heavy; `glab` is the official CLI."},
+    {"name": ["aws"], "pkg": ["aws-mcp", "server-aws"],
+     "cli": "aws", "reason": "AWS MCP wraps the SDK; the `aws` CLI has the same surface area with no per-turn cost."},
+    {"name": ["gcp", "google-cloud", "googlecloud"], "pkg": ["gcp-mcp", "server-gcp"],
+     "cli": "gcloud", "reason": "`gcloud` covers GCP resource management at zero idle cost."},
+    {"name": ["kubernetes", "k8s", "kubectl"], "pkg": ["kubernetes-mcp", "k8s-mcp"],
+     "cli": "kubectl", "reason": "`kubectl` is the canonical K8s CLI; the MCP adds latency and context for no functional gain."},
+    {"name": ["docker"], "pkg": ["docker-mcp", "server-docker"],
+     "cli": "docker", "reason": "`docker` CLI covers images, containers, compose — MCP is pure overhead."},
+    {"name": ["terraform"], "pkg": ["terraform-mcp"],
+     "cli": "terraform", "reason": "Terraform CLI is the standard interface; MCP wrappers duplicate it."},
+    {"name": ["stripe"], "pkg": ["stripe-mcp"],
+     "cli": "stripe", "reason": "Stripe CLI is lightweight and offers the same functionality."},
+    {"name": ["sentry"], "pkg": ["sentry-mcp"],
+     "cli": "sentry-cli", "reason": "`sentry-cli` covers release + event management."},
+    {"name": ["postgres", "postgresql"], "pkg": ["postgres-mcp", "server-postgres"],
+     "cli": "psql", "reason": "`psql` is the canonical Postgres CLI; MCP wrappers rarely add value."},
+    {"name": ["jira", "atlassian"], "pkg": ["jira-mcp", "atlassian-mcp"],
+     "cli": "acli", "reason": "Atlassian's `acli` (or jira-cli) is the usual replacement."},
+    {"name": ["trello"], "pkg": ["trello-mcp"],
+     "cli": "trello", "reason": "`trello` CLI (mheap/trello-cli) covers board / list / card ops."},
+    {"name": ["linear"], "pkg": ["linear-mcp"],
+     "cli": "linear", "reason": "Linear CLI + API work well; MCP adds per-turn schema load."},
+    {"name": ["playwright"], "pkg": ["playwright-mcp"],
+     "cli": "playwright", "reason": "Playwright CLI (via `npx playwright`) drives the same browser automation."},
+    {"name": ["puppeteer"], "pkg": ["puppeteer-mcp"],
+     "cli": "puppeteer (node script)", "reason": "Direct puppeteer usage from a node script keeps context clean."},
+    {"name": ["brave-search", "bravesearch"], "pkg": ["brave-search"],
+     "cli": "WebSearch tool", "reason": "Claude Code's built-in WebSearch tool already covers general search."},
+    {"name": ["fetch", "server-fetch"], "pkg": ["server-fetch"],
+     "cli": "WebFetch tool", "reason": "Claude Code's built-in WebFetch tool already covers URL retrieval."},
+    {"name": ["filesystem"], "pkg": ["server-filesystem"],
+     "cli": "native Read/Write/Bash", "reason": "Claude Code's built-in file tools are strictly cheaper."},
+    {"name": ["memory"], "pkg": ["server-memory"],
+     "cli": "auto-memory / CLAUDE.md", "reason": "Claude Code's auto-memory system covers the same ground without per-turn cost."},
+]
+
+
+def match_cli_alternatives(name, command, args):
+    """Return matching CLI-alternative entries for an MCP server."""
+    haystack_name = (name or "").lower()
+    haystack_cmd = " ".join([command or ""] + (args or [])).lower()
+    matches = []
+    for entry in CLI_ALTERNATIVES:
+        if any(p in haystack_name for p in entry["name"]):
+            matches.append(entry)
+            continue
+        if any(p in haystack_cmd for p in entry["pkg"]):
+            matches.append(entry)
+    return matches
+
+
 def read_text(path):
     try:
         with open(path) as f:
@@ -213,6 +281,36 @@ def main():
 
     # Plugins
     out["plugins_enabled"] = list((merged.get("enabledPlugins") or {}).keys())
+
+    # MCP servers with CLI alternatives. Read user-configured servers
+    # from ~/.claude.json (global + per-project) and any .mcp.json files
+    # walked from cwd; match each against the CLI_ALTERNATIVES registry.
+    mcp_servers = {}
+    claude_json = load_settings(os.path.join(HOME, ".claude.json"))
+    mcp_servers.update(claude_json.get("mcpServers") or {})
+    proj = claude_json.get("projects", {}).get(CWD, {}) or {}
+    mcp_servers.update(proj.get("mcpServers") or {})
+    # Project .mcp.json files (already discovered below; iterate eagerly)
+    for path in find_mcp_json_files(CWD):
+        data = load_settings(path)
+        mcp_servers.update(data.get("mcpServers") or {})
+
+    cli_candidates = []
+    for sname, scfg in mcp_servers.items():
+        if not isinstance(scfg, dict):
+            continue
+        matches = match_cli_alternatives(
+            sname,
+            scfg.get("command", ""),
+            scfg.get("args") or [],
+        )
+        for m in matches:
+            cli_candidates.append({
+                "server": sname,
+                "suggested_cli": m["cli"],
+                "reason": m["reason"],
+            })
+    out["cli_alternative_candidates"] = cli_candidates
 
     # Permissions (concatenate allow/deny across all scopes)
     allow, deny = [], []

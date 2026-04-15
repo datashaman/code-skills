@@ -56,11 +56,28 @@ over-penalize. If large, drill in:
 - Count user-configured servers from `~/.claude.json > mcpServers` and
   project-scoped `projects[<cwd>] > mcpServers` (the scan scripts
   already do this).
-- Flag servers with CLI alternatives (GitHub, Google Workspace,
-  Playwright) when they're heavyweight.
 - Look for redundant tool schemas: servers with 40 tools where only
   3 get called — narrow via per-server allowlist rather than
   uninstalling.
+
+**CLI-alternative candidates.** Scanner emits
+`cli_alternative_candidates[]` listing user-configured MCP servers
+that match a known-heavyweight registry (GitHub, GitLab, AWS, GCP,
+Kubernetes, Docker, Terraform, Postgres, Jira, Linear, Trello,
+Playwright, Puppeteer, Stripe, Sentry, filesystem/memory/fetch
+built-ins, and more). For each match, flag as a **WARNING** with the
+suggested CLI and the specific reason:
+
+- `github` MCP has 40+ tools and loads their schemas every turn —
+  `gh` covers issues, PRs, workflows, releases, and repo ops at zero
+  token cost when idle. Same story for `gitlab`/`glab`, `aws`/`aws`
+  CLI, `gcp`/`gcloud`, `kubernetes`/`kubectl`, and so on.
+- The CLI-first rule of thumb: if a reasonable CLI exists and the
+  MCP server has > 5 tools, the CLI is almost always cheaper
+  *unless* you specifically need schema-level awareness of the
+  responses (rare).
+- Context7 (docs server) and similar narrow-purpose servers don't
+  have obvious CLI replacements — they aren't in the registry.
 
 See Step 3 "MCP log scan" for broken/stale detection.
 
@@ -394,6 +411,7 @@ Score starts at 100. Deduct per issue:
 | Skill body > 200 lines | -5 each |
 | Skill body > 500 lines | -10 each |
 | Per heavyweight MCP server configured (>5k tokens in `/context`) | -3 each |
+| Per MCP server with a known CLI alternative (`cli_alternative_candidates`) | -5 each |
 | No deny rules + bloat dirs exist | -10 |
 | **Behavioral:** per unused heavyweight MCP server (window) | -5 |
 | **Behavioral:** per unused skill (window) | -2 (cap -10) |
@@ -438,6 +456,7 @@ Turn cost: avg {k} / p95 {k} / p99 {k}
 Broken MCP servers: {list or "none"}
 Needs-auth MCP servers: {list or "none"}
 Unused MCP servers: {list or "none"}
+CLI-alternative candidates: {server → cli, or "none"}
 Unused skills: {list or "none"}
 Unused agents: {list or "none"}
 Tools with >10% error rate: {list or "none"}
@@ -481,6 +500,10 @@ After the report:
   `~/.claude.json > mcpServers` diff
 - Disable unused user-configured MCP servers (set `disabled: true`) or
   narrow their tool allowlists
+- Swap heavyweight MCP servers for their CLI equivalents (e.g.
+  `github` MCP → `gh`; `aws` MCP → `aws`; `kubernetes` MCP →
+  `kubectl`). I can remove the MCP entry and verify the CLI is on
+  PATH; most usage transfers one-to-one
 - For built-in claude.ai servers (Gmail/Calendar/Drive): I can't
   toggle individual ones from here, but you can turn each one off
   interactively via `/mcp`, or disable the whole group by adding

@@ -20,10 +20,12 @@ None. The skill runs against the current project (uses `$PWD` to locate transcri
 
 ## Files in this folder
 
-| File        | Role                                                                       |
-| ----------- | -------------------------------------------------------------------------- |
-| `SKILL.md`  | Full agent instructions: audit steps, filters, aggregation script, report template |
-| `README.md` | This overview                                                              |
+| File                        | Role                                                                                        |
+| --------------------------- | ------------------------------------------------------------------------------------------- |
+| `SKILL.md`                  | Full agent instructions: audit steps, filters, report template                              |
+| `README.md`                 | This overview                                                                               |
+| `scripts/scan_jsonl.py`     | Streams `~/.claude/projects/<slug>/*.jsonl` and emits behavioural aggregates as JSON        |
+| `scripts/scan_mcp_logs.py`  | Parses `~/Library/Caches/claude-cli-nodejs/<slug>/mcp-logs-*/` to flag broken/stale servers |
 
 ## Requirements
 

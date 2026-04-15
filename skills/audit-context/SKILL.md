@@ -120,115 +120,30 @@ whether bloat directories exist in the project:
 Static config says what's *loaded*. JSONL says what's *used*. This is
 where the real wins are.
 
-Locate the project's transcripts:
-
-```bash
-# Project path → slug: leading slash becomes "-", other slashes become "-"
-PROJECT_DIR="$(pwd)"
-SLUG="$(echo "$PROJECT_DIR" | sed 's|/|-|g')"
-JSONL_DIR="$HOME/.claude/projects/$SLUG"
-ls "$JSONL_DIR"/*.jsonl 2>/dev/null | head
-```
-
-If no directory exists, skip Step 3 and note "no session history for
-this project — behavioral scan skipped."
+Transcripts live under `~/.claude/projects/<slug>/*.jsonl` where
+`<slug>` is the project path with `/` → `-`. The bundled scan script
+resolves this automatically from `cwd`; if the script reports
+`{"error": "no session history"}`, skip Step 3.
 
 **Window:** default to last 30 days of session files (by mtime). Let
 the user override.
 
 **Critical:** JSONL files can be tens of MB each and contain sensitive
-history. NEVER `Read` them into context. Stream via Python/jq and
-return aggregates only (counts, rates, top-N lists). Run the scan as
-a single Bash call; feed the summary back.
+history. NEVER `Read` them into context. Use the bundled script, which
+streams them and emits JSON aggregates only.
 
 ### Aggregation script
 
-Save this as a one-shot in `/tmp` and invoke it. It emits JSON.
+Run from the project root (the script derives the JSONL path from
+`cwd`):
 
 ```bash
-python3 - "$JSONL_DIR" 30 <<'PY'
-import sys, os, json, glob, time
-root, days = sys.argv[1], int(sys.argv[2])
-cutoff = time.time() - days*86400
-files = [f for f in glob.glob(os.path.join(root, "*.jsonl"))
-         if os.path.getmtime(f) >= cutoff]
-
-tool_counts = {}
-skill_counts = {}
-turns = 0
-cache_read = cache_create = input_tok = output_tok = 0
-autocompact = 0
-sessions_hit_limit = set()
-sessions = set()
-user_turns_text = []
-
-for fp in files:
-    try:
-        with open(fp) as f:
-            for line in f:
-                try: d = json.loads(line)
-                except: continue
-                sid = d.get('sessionId')
-                if sid: sessions.add(sid)
-                t = d.get('type')
-                m = d.get('message') or {}
-                if not isinstance(m, dict): continue
-                u = m.get('usage') or {}
-                if u:
-                    turns += 1
-                    cache_read   += u.get('cache_read_input_tokens', 0) or 0
-                    cache_create += u.get('cache_creation_input_tokens', 0) or 0
-                    input_tok    += u.get('input_tokens', 0) or 0
-                    output_tok   += u.get('output_tokens', 0) or 0
-                content = m.get('content')
-                if isinstance(content, list):
-                    for c in content:
-                        if not isinstance(c, dict): continue
-                        if c.get('type') == 'tool_use':
-                            name = c.get('name', '')
-                            tool_counts[name] = tool_counts.get(name, 0) + 1
-                            if name == 'Skill':
-                                skill = (c.get('input') or {}).get('skill')
-                                if skill:
-                                    skill_counts[skill] = skill_counts.get(skill, 0) + 1
-                if t == 'user' and isinstance(content, str):
-                    if len(user_turns_text) < 2000:
-                        user_turns_text.append(content[:200].lower())
-                if t == 'system':
-                    s = json.dumps(d).lower()
-                    if 'autocompact' in s or 'auto-compact' in s or 'compacted' in s:
-                        autocompact += 1
-                        if sid: sessions_hit_limit.add(sid)
-    except Exception as e:
-        pass
-
-total_input = cache_read + cache_create + input_tok
-cache_hit = (cache_read / total_input) if total_input else 0.0
-
-# Correction signal: count user turns starting with common correction words.
-corrections = sum(1 for t in user_turns_text
-                  if t.lstrip().startswith(("no ", "no,", "don't", "stop ",
-                                             "wrong", "that's wrong", "not ")))
-
-out = {
-    "window_days": days,
-    "files_scanned": len(files),
-    "sessions": len(sessions),
-    "assistant_turns": turns,
-    "cache_hit_rate": round(cache_hit, 3),
-    "tokens": {"cache_read": cache_read, "cache_create": cache_create,
-               "input": input_tok, "output": output_tok},
-    "autocompact_events": autocompact,
-    "sessions_hit_autocompact": len(sessions_hit_limit),
-    "tool_top": sorted(tool_counts.items(), key=lambda x:-x[1])[:30],
-    "tool_total_distinct": len(tool_counts),
-    "skill_top": sorted(skill_counts.items(), key=lambda x:-x[1])[:30],
-    "correction_user_turns": corrections,
-    "user_turns_sampled": len(user_turns_text),
-}
-print(json.dumps(out, indent=2))
-PY
+python3 "$SKILL_DIR/scripts/scan_jsonl.py" 30
 ```
+
+Where `$SKILL_DIR` is the skill's base directory announced at the top
+of this invocation (substitute the absolute path literally). The
+argument is the window in days; default 30.
 
 ### Derive findings from the aggregate
 
@@ -292,52 +207,14 @@ OAuth). Entries here are configured but not authenticated — warn
 once per entry; they're lighter waste than broken servers but still
 load schemas.
 
-Aggregate example (one Bash call, Python streams; emit JSON):
+Run the bundled script:
 
 ```bash
-python3 - <<'PY'
-import os, json, glob, platform, time
-home = os.path.expanduser("~")
-cwd = os.getcwd()
-slug = cwd.replace("/", "-")
-candidates = [
-    os.path.join(home, "Library/Caches/claude-cli-nodejs", slug),
-    os.path.join(home, ".cache/claude-cli-nodejs", slug),
-]
-root = next((p for p in candidates if os.path.isdir(p)), None)
-out = {"root": root, "servers": {}}
-if root:
-    cutoff = time.time() - 30*86400
-    for d in sorted(glob.glob(os.path.join(root, "mcp-logs-*"))):
-        server = os.path.basename(d).replace("mcp-logs-", "")
-        files = [f for f in glob.glob(os.path.join(d, "*.jsonl"))
-                 if os.path.getmtime(f) >= cutoff]
-        errors = conn_fail = 0
-        for fp in files:
-            try:
-                with open(fp) as f:
-                    for line in f:
-                        try: j = json.loads(line)
-                        except: continue
-                        if "error" in j: errors += 1
-                        msg = json.dumps(j)
-                        if "Connection failed" in msg: conn_fail += 1
-            except: pass
-        out["servers"][server] = {
-            "sessions": len(files),
-            "errors": errors,
-            "connection_failures": conn_fail,
-            "broken": len(files) > 0 and conn_fail >= len(files),
-        }
-auth_cache = os.path.join(home, ".claude/mcp-needs-auth-cache.json")
-if os.path.isfile(auth_cache):
-    try:
-        with open(auth_cache) as f:
-            out["needs_auth"] = sorted(json.load(f).keys())
-    except: pass
-print(json.dumps(out, indent=2))
-PY
+python3 "$SKILL_DIR/scripts/scan_mcp_logs.py" 30
 ```
+
+Same convention as `scan_jsonl.py` — substitute the skill's absolute
+base directory for `$SKILL_DIR`.
 
 Findings:
 

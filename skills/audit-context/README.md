@@ -1,6 +1,6 @@
 # audit-context
 
-**Context audit** for Claude Code setups: finds token waste and context bloat across MCP servers, CLAUDE.md rules (including `@` imports), skills, settings, and file permissions — then mines local session JSONL transcripts for behavioral signals (unused tools, cache hit rate, autocompact frequency). Returns a health score with specific, actionable fixes.
+**Context audit** for Claude Code setups: finds token waste and context bloat across every surface that contributes to per-turn cost, then mines local session transcripts and MCP connection logs for the "what actually happens" signals. Returns a 0–100 health score with specific, actionable fixes.
 
 ## When to use
 
@@ -9,10 +9,25 @@ Good prompts: *audit my context*, *check my settings*, *why is Claude so slow*, 
 ## How it works
 
 1. **`/context` data** — the audit starts from the real overhead numbers shown by `/context`. The skill asks the user to run it (Claude can't run slash commands itself).
-2. **Config audit** — reads MCP config, CLAUDE.md (+imports), skill descriptions/bodies, settings, and `permissions.deny`. Applies five filters to rules: default, contradiction, redundancy, bandaid, vague.
-3. **Behavioral scan** — streams session transcripts from `~/.claude/projects/<slug>/*.jsonl` via Python (never `Read`s them — they can be tens of MB and contain sensitive history). Returns aggregates only: tool/skill usage, cache hit rate, autocompact events, correction rate.
-4. **Score and report** — 0–100 score with CLEAN / NEEDS WORK / BLOATED / CRITICAL bands, plus top-3 fixes.
-5. **Offer to fix** — auto-applies safe settings changes; shows diffs for CLAUDE.md / skill / MCP edits before modifying.
+2. **Config audit** (`scan_configs.py`) — inventories user + project scope:
+   - MCP servers (user-configured in `~/.claude.json`, built-in `claude.ai *`, project `.mcp.json` files walked from cwd)
+   - CLAUDE.md with `@imports` followed recursively; ghost `/slash` references; file mtimes for rot detection
+   - Skills, agents, slash commands (body line counts, oversize flags)
+   - Plugins enabled, hooks per scope
+   - Merged settings: `autoCompactWindow`, `BASH_MAX_OUTPUT_LENGTH`, `disableAllHooks`, `advisorModel`, etc.
+   - `permissions.allow` / `deny` plus detected bloat dirs (`node_modules`, `target`, …)
+   - Applies five filters to rules: default, contradiction, redundancy, bandaid, vague
+3. **Behavioral scan** (`scan_jsonl.py`) — streams session transcripts from `~/.claude/projects/<slug>/*.jsonl` via Python (never `Read`s them — they can be tens of MB and contain sensitive history). Returns aggregates only:
+   - Cache hit rate, autocompact events, correction rate
+   - Turn-cost percentiles (p50 / p95 / p99) to catch balloons the average hides
+   - Per-tool error rates (flags tools failing > 10% of calls)
+   - Top repeated `Read` paths (CLAUDE.md pointer candidates)
+   - Large tool-result outliers (>30 KB) grouped by originating tool
+   - `Agent` subagent-type usage (for unused-agent detection)
+   - Bash command sample for cross-referencing `permissions.allow` staleness
+4. **MCP log scan** (`scan_mcp_logs.py`) — parses `~/Library/Caches/claude-cli-nodejs/<slug>/mcp-logs-*/` to flag broken servers (connection failures every session) and stale needs-auth entries. Classifies each server as **user-configured** (can be removed) or **built-in `claude.ai *`** (only disableable via `/mcp` UI or `ENABLE_CLAUDEAI_MCP_SERVERS=false` env var).
+5. **Score and report** — 0–100 score with CLEAN / NEEDS WORK / BLOATED / CRITICAL bands, plus top-3 fixes.
+6. **Offer to fix** — auto-applies safe settings changes; shows diffs for CLAUDE.md / skill / MCP edits before modifying.
 
 ## Arguments
 

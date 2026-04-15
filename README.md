@@ -34,7 +34,7 @@ Git-based codebase health audit. Runs five diagnostic git commands to identify c
 
 ### `/audit-context`
 
-Audit your Claude Code setup for token waste and context bloat. Starts from `/context` output, then audits MCP servers, CLAUDE.md rules, skills, settings, and file permissions. Mines session JSONL transcripts for behavioral signals (unused tools, cache hit rate, autocompact frequency) and returns a health score with specific fixes.
+Audit your Claude Code setup for token waste and context bloat. Starts from `/context` output, then audits MCP servers (user-configured and built-in `claude.ai *`), CLAUDE.md rules and `@imports`, skills, agents, slash commands, plugins, hooks, settings, and file permissions. Mines session JSONL transcripts for behavioral signals (cache hit rate, autocompact frequency, turn-cost percentiles, per-tool error rates, unused skills/agents, repeated Read paths, large tool-result outliers). Cross-references MCP connection logs to catch broken servers that load schemas but never connect. Returns a health score with specific fixes.
 
 **Usage:**
 ```

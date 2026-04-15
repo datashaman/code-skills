@@ -221,7 +221,16 @@ Findings:
 - **Broken MCP server** (`broken: true`). CRITICAL. Recommend removing
   the entry or fixing the command/URL. Every session pays for its
   tool schemas and gets nothing back.
-- **Needs-auth MCP server.** WARNING. Either authenticate or remove.
+- **Needs-auth MCP server.** Handling depends on origin:
+  - **Built-in `claude.ai *` servers** (Gmail, Google Calendar, Google
+    Drive) are shipped by claude.ai and cannot be removed per-server.
+    They can only be turned off as a group via the env var
+    `ENABLE_CLAUDEAI_MCP_SERVERS=false` (set in shell or under
+    `settings.json > env`). With Tool Search enabled (default), they
+    cost almost nothing when left unauthenticated — safe to ignore
+    unless the user explicitly never wants them. INFO, not WARNING.
+  - **User-configured servers** left unauthenticated are stale config:
+    recommend authenticating or removing. WARNING.
 
 ## Step 4: Score and Report
 
@@ -246,7 +255,8 @@ Score starts at 100. Deduct per issue:
 | **Behavioral:** cache hit rate < 40% | additional -10 |
 | **Behavioral:** autocompact > 30% of sessions | -5 |
 | **MCP logs:** per broken server (connect-fails every session) | -15 each |
-| **MCP logs:** per needs-auth server left stale | -3 each |
+| **MCP logs:** per needs-auth user-configured server | -3 each |
+| **MCP logs:** per needs-auth built-in `claude.ai *` server | 0 (INFO only) |
 
 "Heavyweight" = servers that load significant tool schemas into every
 turn. Lazy-loaded auth stubs and 2-tool servers that show up under
@@ -302,9 +312,12 @@ After the report:
 - Show a cleaned-up CLAUDE.md with flagged rules removed
 - Add missing settings.json configs
 - Add permissions.deny rules for build artifacts
-- Remove or disable broken MCP servers (those failing every session)
-- Disable unused MCP servers (set `disabled: true`) or narrow their
-  tool allowlists
+- Remove or fix broken user-configured MCP servers (those failing
+  every session)
+- Disable unused user-configured MCP servers (set `disabled: true`) or
+  narrow their tool allowlists
+- Turn off built-in claude.ai MCP servers (Gmail/Calendar/Drive) via
+  `ENABLE_CLAUDEAI_MCP_SERVERS=false` — all-or-nothing, not per-server
 - Show which skills to compress or merge"
 
 Auto-apply settings.json and `permissions.deny` (safe, reversible).

@@ -257,6 +257,95 @@ PY
   `(cache_read + cache_create + input) / assistant_turns`. Outliers
   above 100k are candidates for context-window tightening.
 
+### MCP log scan (high-signal)
+
+Claude Code writes per-server connection logs to a cache directory
+outside `~/.claude/`. A configured server whose logs show connection
+failures every session is pure waste: its tool schemas load into
+context every turn but the server never actually works.
+
+**Paths to check** (try in order; first one that exists wins):
+
+| OS | Path |
+|----|------|
+| macOS | `~/Library/Caches/claude-cli-nodejs/<slug>/mcp-logs-<server>/*.jsonl` |
+| Linux | `~/.cache/claude-cli-nodejs/<slug>/mcp-logs-<server>/*.jsonl` |
+
+Slug = same transformation as the transcript dir (`/` → `-`).
+
+For each `mcp-logs-<server>` directory, count per server over the
+window:
+
+- Total sessions (one `.jsonl` file per session launch)
+- `"error"` keys
+- Lines matching `Connection failed` or `HTTP Connection failed`
+- Lines matching `Executable not found`, `ENOENT`, `timeout`, `404`,
+  `401`, `403`
+
+A server with `connection_failures >= sessions` is **broken** —
+every launch fails. Report it as CRITICAL and recommend removing
+or fixing the MCP entry.
+
+Also read `~/.claude/mcp-needs-auth-cache.json` (a flat JSON map of
+`{server_name: {timestamp}}` for claude.ai MCP servers awaiting
+OAuth). Entries here are configured but not authenticated — warn
+once per entry; they're lighter waste than broken servers but still
+load schemas.
+
+Aggregate example (one Bash call, Python streams; emit JSON):
+
+```bash
+python3 - <<'PY'
+import os, json, glob, platform, time
+home = os.path.expanduser("~")
+cwd = os.getcwd()
+slug = cwd.replace("/", "-")
+candidates = [
+    os.path.join(home, "Library/Caches/claude-cli-nodejs", slug),
+    os.path.join(home, ".cache/claude-cli-nodejs", slug),
+]
+root = next((p for p in candidates if os.path.isdir(p)), None)
+out = {"root": root, "servers": {}}
+if root:
+    cutoff = time.time() - 30*86400
+    for d in sorted(glob.glob(os.path.join(root, "mcp-logs-*"))):
+        server = os.path.basename(d).replace("mcp-logs-", "")
+        files = [f for f in glob.glob(os.path.join(d, "*.jsonl"))
+                 if os.path.getmtime(f) >= cutoff]
+        errors = conn_fail = 0
+        for fp in files:
+            try:
+                with open(fp) as f:
+                    for line in f:
+                        try: j = json.loads(line)
+                        except: continue
+                        if "error" in j: errors += 1
+                        msg = json.dumps(j)
+                        if "Connection failed" in msg: conn_fail += 1
+            except: pass
+        out["servers"][server] = {
+            "sessions": len(files),
+            "errors": errors,
+            "connection_failures": conn_fail,
+            "broken": len(files) > 0 and conn_fail >= len(files),
+        }
+auth_cache = os.path.join(home, ".claude/mcp-needs-auth-cache.json")
+if os.path.isfile(auth_cache):
+    try:
+        with open(auth_cache) as f:
+            out["needs_auth"] = sorted(json.load(f).keys())
+    except: pass
+print(json.dumps(out, indent=2))
+PY
+```
+
+Findings:
+
+- **Broken MCP server** (`broken: true`). CRITICAL. Recommend removing
+  the entry or fixing the command/URL. Every session pays for its
+  tool schemas and gets nothing back.
+- **Needs-auth MCP server.** WARNING. Either authenticate or remove.
+
 ## Step 4: Score and Report
 
 Score starts at 100. Deduct per issue:
@@ -279,6 +368,8 @@ Score starts at 100. Deduct per issue:
 | **Behavioral:** cache hit rate < 60% | -10 |
 | **Behavioral:** cache hit rate < 40% | additional -10 |
 | **Behavioral:** autocompact > 30% of sessions | -5 |
+| **MCP logs:** per broken server (connect-fails every session) | -15 each |
+| **MCP logs:** per needs-auth server left stale | -3 each |
 
 "Heavyweight" = servers that load significant tool schemas into every
 turn. Lazy-loaded auth stubs and 2-tool servers that show up under
@@ -299,6 +390,8 @@ Score: {N}/100 [{CLEAN|NEEDS WORK|BLOATED|CRITICAL}]
 ## Behavioral Scan ({days}d, {sessions} sessions, {turns} turns)
 Cache hit rate: {%}
 Autocompact: {N}/{total} sessions
+Broken MCP servers: {list or "none"}
+Needs-auth MCP servers: {list or "none"}
 Unused MCP servers: {list or "none"}
 Unused skills: {list or "none"}
 Top tools: {top 5 by call count}
@@ -332,6 +425,7 @@ After the report:
 - Show a cleaned-up CLAUDE.md with flagged rules removed
 - Add missing settings.json configs
 - Add permissions.deny rules for build artifacts
+- Remove or disable broken MCP servers (those failing every session)
 - Disable unused MCP servers (set `disabled: true`) or narrow their
   tool allowlists
 - Show which skills to compress or merge"

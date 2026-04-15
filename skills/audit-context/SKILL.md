@@ -92,8 +92,12 @@ Check `settings.json` for:
 
 | Setting | Flag if | Recommended |
 |---------|---------|-------------|
-| autocompact_percentage_override | Missing or > 80 | 75 |
-| BASH_MAX_OUTPUT_LENGTH (env) | At default (30–50k) | 150000 |
+| `autoCompactWindow` | Missing *and* sessions hit autocompact (see Step 3) | ~75% of the model's context window in tokens (e.g. `150000` for 200k models, `750000` for 1M). Schema range: 100000–1000000. |
+| `env.BASH_MAX_OUTPUT_LENGTH` | At default (30–50k) | `"150000"` (string) |
+
+Before recommending `autoCompactWindow`, confirm from Step 3 that
+`sessions_hit_autocompact > 0`. If the behavioral scan shows zero
+autocompacts, the default is fine and setting this is noise.
 
 Also scan `permissions.allow` for stale entries: commands or patterns
 that haven't been used in the behavioral scan window (Step 3). These
@@ -264,17 +268,23 @@ Score starts at 100. Deduct per issue:
 | Per 5 rules flagged by filters | -5 |
 | Contradictions between files | -10 |
 | Overlapping skill descriptions (per pair) | -5 |
-| Missing autocompact override | -10 |
-| Missing bash output override | -5 |
+| Missing `autoCompactWindow` *and* sessions hit autocompact | -10 |
+| Missing `BASH_MAX_OUTPUT_LENGTH` | -5 |
 | Skill body > 200 lines | -5 each |
 | Skill body > 500 lines | -10 each |
-| Per MCP server configured | -3 each |
+| Per heavyweight MCP server configured (>5k tokens in `/context`) | -3 each |
 | No deny rules + bloat dirs exist | -10 |
-| **Behavioral:** per unused MCP server (window) | -5 |
+| **Behavioral:** per unused heavyweight MCP server (window) | -5 |
 | **Behavioral:** per unused skill (window) | -2 (cap -10) |
 | **Behavioral:** cache hit rate < 60% | -10 |
 | **Behavioral:** cache hit rate < 40% | additional -10 |
 | **Behavioral:** autocompact > 30% of sessions | -5 |
+
+"Heavyweight" = servers that load significant tool schemas into every
+turn. Lazy-loaded auth stubs and 2-tool servers that show up under
+"Available" in `/context` rather than the top-level System tools
+budget are not heavyweight — don't penalize them, they cost almost
+nothing when idle.
 
 Floor at 0. Output this format:
 

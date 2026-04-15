@@ -122,6 +122,16 @@ def load_settings(path):
         return {}
 
 
+def managed_settings_paths():
+    """Managed settings locations across platforms. These are enterprise
+    / MDM settings that take highest precedence and cannot be overridden."""
+    return [
+        "/Library/Application Support/ClaudeCode/managed-settings.json",  # macOS
+        "/etc/claude-code/managed-settings.json",                          # Linux/WSL
+        r"C:\Program Files\ClaudeCode\managed-settings.json",              # Windows
+    ]
+
+
 def find_mcp_json_files(start):
     """Walk from cwd up to $HOME looking for .mcp.json files."""
     found = []
@@ -141,22 +151,37 @@ def find_mcp_json_files(start):
 def main():
     out = {"cwd": CWD}
 
-    # Settings files (user + project)
+    # Settings files across all scopes. Merge precedence (lowest to
+    # highest, per https://code.claude.com/docs/en/settings.md):
+    #   user < user_local < project < project_local < managed
+    # user_local isn't in the official precedence table but Claude Code
+    # reads it in practice; managed takes effect across all platforms.
     user_settings = load_settings(os.path.join(HOME, ".claude/settings.json"))
     user_local = load_settings(os.path.join(HOME, ".claude/settings.local.json"))
     project_settings = load_settings(os.path.join(CWD, ".claude/settings.json"))
     project_local = load_settings(os.path.join(CWD, ".claude/settings.local.json"))
+
+    managed = {}
+    managed_found_at = None
+    for p in managed_settings_paths():
+        if os.path.isfile(p):
+            managed = load_settings(p)
+            managed_found_at = p
+            break
 
     out["settings"] = {
         "user": user_settings,
         "user_local": user_local,
         "project": project_settings,
         "project_local": project_local,
+        "managed": managed,
+        "managed_path": managed_found_at,
     }
 
-    # Misc settings that matter for context cost
+    # Misc settings that matter for context cost — merged in precedence
+    # order so later sources override earlier ones.
     merged = {}
-    for s in (user_settings, user_local, project_settings, project_local):
+    for s in (user_settings, user_local, project_settings, project_local, managed):
         merged.update(s)
     out["misc"] = {
         "disableAllHooks": merged.get("disableAllHooks", False),
@@ -171,12 +196,13 @@ def main():
         "skillListingMaxDescChars": merged.get("skillListingMaxDescChars"),
     }
 
-    # Hooks (user + project)
+    # Hooks (all scopes, including managed)
     hook_sources = {
         "user": (user_settings.get("hooks") or {}),
         "user_local": (user_local.get("hooks") or {}),
         "project": (project_settings.get("hooks") or {}),
         "project_local": (project_local.get("hooks") or {}),
+        "managed": (managed.get("hooks") or {}),
     }
     hook_counts = {}
     for scope, hooks in hook_sources.items():
@@ -188,9 +214,9 @@ def main():
     # Plugins
     out["plugins_enabled"] = list((merged.get("enabledPlugins") or {}).keys())
 
-    # Permissions (concatenate allow/deny across sources)
+    # Permissions (concatenate allow/deny across all scopes)
     allow, deny = [], []
-    for s in (user_settings, user_local, project_settings, project_local):
+    for s in (user_settings, user_local, project_settings, project_local, managed):
         p = s.get("permissions") or {}
         allow.extend(p.get("allow") or [])
         deny.extend(p.get("deny") or [])

@@ -166,7 +166,25 @@ tokens if it prints anything. Flag:
 
 ### Settings
 
-Scanner emits `misc` (merged across user/user_local/project/project_local):
+Scanner reads every persisted settings source and emits `misc`
+(merged in precedence order, lowest → highest):
+
+1. `~/.claude/settings.json` (user)
+2. `~/.claude/settings.local.json` (user local — not in official
+   precedence docs but read in practice)
+3. `<cwd>/.claude/settings.json` (project)
+4. `<cwd>/.claude/settings.local.json` (project local)
+5. **Managed / enterprise** — loaded from the first existing path:
+   - macOS: `/Library/Application Support/ClaudeCode/managed-settings.json`
+   - Linux/WSL: `/etc/claude-code/managed-settings.json`
+   - Windows: `C:\Program Files\ClaudeCode\managed-settings.json`
+
+   Managed settings take highest precedence and cannot be overridden
+   by the user; `settings.managed_path` reports which file was used
+   (null if none). Source:
+   <https://code.claude.com/docs/en/settings.md>.
+
+Relevant fields in `misc`:
 
 | Setting | Flag if | Recommended |
 |---------|---------|-------------|

@@ -4,10 +4,15 @@ description: >
   Audit your Claude Code setup for token waste and context bloat. Use when
   the user says "audit my context", "check my settings", "why is Claude so
   slow", "token optimization", "context audit", or runs /audit-context.
-  Starts by running /context to see real overhead, then audits MCP servers,
-  CLAUDE.md rules, skills, settings, and file permissions. Mines session
-  JSONL transcripts for behavioral signals (unused tools, cache hit rate,
-  autocompact frequency). Returns a health score with specific fixes.
+  Starts by running /context to see real overhead, then audits MCP servers
+  (user-configured and built-in claude.ai), CLAUDE.md rules and imports,
+  skills, agents, slash commands, plugins, hooks, settings, and file
+  permissions. Mines session JSONL transcripts for behavioral signals:
+  cache hit rate, autocompact frequency, turn-cost percentiles, per-tool
+  error rates, unused skills/agents, repeated Read paths, and large
+  tool-result outliers. Cross-references MCP connection logs to catch
+  broken servers that load schemas but never connect. Returns a health
+  score with specific fixes.
 user-invocable: true
 ---
 
@@ -31,28 +36,38 @@ determines audit priority; without it, the audit is guessing.
 
 ## Step 2: Config Audit
 
-Audit each category from largest overhead to smallest. Run checks in
-parallel where possible.
+Run the bundled config scanner first — it inventories everything that
+contributes to per-turn context:
+
+```bash
+python3 "$SKILL_DIR/scripts/scan_configs.py"
+```
+
+Substitute the skill's absolute base directory for `$SKILL_DIR` (it's
+announced at the top of this invocation). Output is a single JSON
+object; use the sections below to interpret each field.
 
 ### MCP Servers
 
-Each configured server loads full tool definitions into context every
-turn (~15k–20k tokens each, more with many tools).
+`/context` tells you the real overhead (System tools bucket). If that
+bucket is small (< 5k), MCP servers are lazy-loaded and cheap — don't
+over-penalize. If large, drill in:
 
-- Count configured servers in `settings.json` and `.mcp.json`.
-- Flag servers with CLI alternatives (Playwright, GitHub, Google
-  Workspace all have CLIs that cost zero tokens when idle).
-- Check each server's `disabled` flag and per-server `enabledMcpjsonServers`
-  / tool allowlist — a server with 40 tools where only 3 are used is
-  fixable via allowlist without removing the server.
-- Report total MCP overhead from /context output.
+- Count user-configured servers from `~/.claude.json > mcpServers` and
+  project-scoped `projects[<cwd>] > mcpServers` (the scan scripts
+  already do this).
+- Flag servers with CLI alternatives (GitHub, Google Workspace,
+  Playwright) when they're heavyweight.
+- Look for redundant tool schemas: servers with 40 tools where only
+  3 get called — narrow via per-server allowlist rather than
+  uninstalling.
 
-### CLAUDE.md (follow imports)
+See Step 3 "MCP log scan" for broken/stale detection.
 
-Read all CLAUDE.md files: project root, `.claude/CLAUDE.md`,
-`~/.claude/CLAUDE.md`. Then follow `@path/to/file` import lines
-recursively — imported files count toward the same context budget.
-Report the combined line count.
+### CLAUDE.md
+
+Scanner returns `claude_md.files[]` (path, line count, mtime) with
+`@imports` followed, plus `claude_md.total_lines`.
 
 Test every rule against five filters:
 
@@ -64,49 +79,117 @@ Test every rule against five filters:
 | Bandaid | Added to fix one bad output, not improve outputs generally |
 | Vague | Interpreted differently every time ("be natural", "use good tone") |
 
-If total (including imports) > 200 lines, look for progressive disclosure
-opportunities: rules that only apply to specific tasks (API conventions,
-deployment steps, testing guidelines) should move to reference files
-with one-line pointers. A lean CLAUDE.md with universal context is fine
-as a single file.
+If `total_lines > 200`, look for progressive-disclosure wins: rules
+that only apply to specific tasks (API conventions, deployment steps,
+testing guidelines) should move to reference files with one-line
+pointers.
+
+**Ghost references.** Scanner emits `ghost_refs[]`: slash-command-like
+references (`/foo`) in CLAUDE.md that don't resolve to any installed
+skill or command. These rot whenever you reorganize — recommend
+removal. Each one is also a tiny correctness hazard (Claude may try
+to invoke the dead name).
+
+**Rot signal.** Cross-reference `claude_md.files[].mtime` with the
+behavioral scan's `correction_user_turns / user_turns_sampled` ratio
+(Step 3). A stale CLAUDE.md (> 90 days old) plus a high correction
+rate (> 15%) is strong evidence the rules have drifted from what the
+user actually wants. Recommend a review pass.
 
 ### Skills
 
-Scan `.claude/skills/*/SKILL.md` and `~/.claude/skills/*/SKILL.md`.
-Skill *descriptions* are always loaded; bodies are fetched on invocation.
+Scanner emits `skills[]` with `{name, scope, path, body_lines, mtime}`
+and `flags.skills_oversize` / `flags.skills_critical`.
 
-For each skill:
-- Count lines in the body (flag > 200, critical > 500).
-- Run the same five filters on instructions.
+For each oversize skill (>200 lines) or critical (>500):
+- Run the same five filters on the body.
 - Check for restated goals, hedging ("you may want to"), synonymous
   instructions ("be concise" + "keep it short" + "don't be verbose").
+- If the body is mostly example code or long scripts, recommend
+  extracting to sibling files under a `scripts/` or `examples/` dir
+  and referencing them — this skill does exactly that.
 
 Also compare descriptions pairwise. If two skills have highly
 overlapping descriptions (same triggers, same verbs), the router
 wastes tokens disambiguating. Flag the overlap and recommend merging
 or narrowing triggers.
 
+**Cache stability.** Skill descriptions are in every turn's prompt
+cache. If a skill's `mtime` falls inside the behavioral window AND
+`cache_hit_rate` dropped, flag it as cache churn — editing skills
+mid-sessions silently tanks hit rate.
+
+### Agents
+
+Scanner emits `agents[]` (user and project scope) and
+`flags.agents_oversize`. Agents are system prompts for subagents
+spawned via the `Agent` tool. Each spawn pays the agent's prompt
+budget.
+
+Audit:
+- Body size (same >200 / >500 thresholds as skills).
+- Usage via Step 3's `agent_subagent_types` — agents never called
+  are dead weight. With zero window usage, flag for removal unless
+  the user confirms they're for future use.
+- Description overlap with skills or other agents.
+
+### Slash Commands
+
+Scanner emits `commands[]` and `flags.commands_oversize`. Commands
+are less chatty than skills (only load when invoked) but dead
+commands still clutter `/help` output and can be confused with
+ghost refs. Cross-check against `ghost_refs` — if a CLAUDE.md
+mentions `/foo` and no command named `foo` exists, that's the
+correct resolution.
+
+### Plugins
+
+Scanner emits `plugins_enabled[]` from the merged settings. Each
+enabled plugin may contribute skills, agents, hooks, and MCP
+servers. For each plugin with zero observed use (no matching entries
+in `skill_top`, `agent_subagent_types`, hooks firing, or MCP tool
+calls) over the window, recommend disabling it.
+
+### Hooks
+
+Scanner emits `hooks` (per-scope count of configured hooks). Hooks
+run on every matching event — even a no-op fork costs latency and
+tokens if it prints anything. Flag:
+
+- Hooks guarded solely by an `|| true` or env-var check — they fork
+  a shell every event for nothing. Remove unless you actively need
+  them (this skill flagged one such batch earlier).
+- Hook counts > 10 in any scope — audit whether each is earning its
+  cost.
+- `disableAllHooks: true` — note it in the report so the user knows
+  hooks aren't running at all.
+
 ### Settings
 
-Check `settings.json` for:
+Scanner emits `misc` (merged across user/user_local/project/project_local):
 
 | Setting | Flag if | Recommended |
 |---------|---------|-------------|
 | `autoCompactWindow` | Missing *and* sessions hit autocompact (see Step 3) | ~75% of the model's context window in tokens (e.g. `150000` for 200k models, `750000` for 1M). Schema range: 100000–1000000. |
 | `env.BASH_MAX_OUTPUT_LENGTH` | At default (30–50k) | `"150000"` (string) |
+| `disableSkillShellExecution` | True (if user depends on skill scripts) | Note in report |
+| `advisorModel` | Missing or set to a weaker model than default | `"opus"` or leave default |
+| `skillListingBudgetFraction` / `skillListingMaxDescChars` | Raised above defaults | Standard defaults unless user is intentionally spending context on skill descriptions |
 
 Before recommending `autoCompactWindow`, confirm from Step 3 that
-`sessions_hit_autocompact > 0`. If the behavioral scan shows zero
-autocompacts, the default is fine and setting this is noise.
+`sessions_hit_autocompact > 0`. Same for `BASH_MAX_OUTPUT_LENGTH` —
+if no tool_result outliers above the default, there's no waste to
+fix.
 
-Also scan `permissions.allow` for stale entries: commands or patterns
-that haven't been used in the behavioral scan window (Step 3). These
-cost nothing but clutter audits.
+**Permissions staleness.** Cross-reference `permissions.allow` with
+Step 3's `bash_commands_sample` and `tool_top`. A `Bash(git *)` rule
+that never matched an observed command in the window is a candidate
+for removal. These cost nothing but clutter audits.
 
 ### File Permissions
 
-Check `settings.json` for `permissions.deny` rules. If missing, check
-whether bloat directories exist in the project:
+Scanner emits `bloat_dirs_present[]`. If non-empty and
+`permissions.deny` lacks matching entries, recommend adding them:
 
 | If this exists... | Should deny reads under... |
 |-------------------|---------------|
@@ -114,6 +197,13 @@ whether bloat directories exist in the project:
 | Cargo.toml | target |
 | go.mod | vendor |
 | pyproject.toml / requirements.txt | __pycache__, .venv, *.egg-info |
+
+### .mcp.json files
+
+Scanner emits `mcp_json_files[]`. Project-scoped MCP configs live
+here. Walk each up from `cwd` to `$HOME`. If a `.mcp.json` exists
+that the user didn't author, it's team-shared — audit the same way
+as `~/.claude.json > mcpServers`.
 
 ## Step 3: Behavioral Scan (JSONL)
 
@@ -155,6 +245,9 @@ argument is the window in days; default 30.
 - **Unused skills.** Compare configured skills (Step 2) against
   `skill_top`. Skills with zero invocations in the window are dead
   weight in the router.
+- **Unused agents.** Compare configured agents (Step 2) against
+  `agent_subagent_types`. Never-spawned agents over the window are
+  candidates for removal.
 - **Cache hit rate.**
   - > 80% — healthy
   - 60–80% — acceptable
@@ -168,9 +261,34 @@ argument is the window in days; default 30.
   High rate (> 15%) points at missing CLAUDE.md guidance or skills
   that aren't firing. Don't score this — surface it as an INFO finding
   with examples.
-- **Turn cost.** Average input tokens per assistant turn =
-  `(cache_read + cache_create + input) / assistant_turns`. Outliers
-  above 100k are candidates for context-window tightening.
+- **Turn cost.** Look at `avg_input_per_turn` *and* `p95_input_per_turn`,
+  `p99_input_per_turn`. Avg > 100k → context is chronically wide.
+  p95 >> avg → specific turns are ballooning — often a giant tool
+  result (see `large_tool_results_top`) or a runaway subagent. Tightening
+  p95 is usually higher ROI than trimming the average.
+- **Tool error rate.** `tool_error_rates` is a `{tool: {calls, errors,
+  rate}}` map of tools whose results came back `is_error: true`. A
+  high-volume tool with rate > 10% suggests a skill or CLAUDE.md rule
+  is pushing Claude to use something that doesn't fit, or a missing
+  permission / bad argument shape. Surface each as a WARNING with
+  sample counts; the fix is usually in the skill body, not the tool.
+- **Read-path repetition.** `read_paths_top` lists the 20 files
+  Claude Reads most. A file read in many sessions is a candidate for
+  either: (a) a CLAUDE.md pointer so Claude knows it exists without
+  opening it, or (b) a pre-digested summary doc if the file is large.
+- **Large tool results.** `large_tool_results_top` is a list of
+  `{tool, bytes}` for single tool_result outputs over 30KB. Patterns:
+  - `Bash` outliers → the command is dumping something the skill
+    should pipe to a file (long logs, `ls -R`, test output).
+  - `Read` outliers → Claude is reading files that might be generated
+    (lockfiles, minified assets, compiled output) — a
+    `permissions.deny` rule usually solves it.
+  - `WebFetch` outliers → consider caching.
+- **Bash command diversity.** `bash_commands_sample` contains up to
+  500 commands (first 300 chars each). Scan for repetitive patterns:
+  if the same `git log …` or `npm run test` appears hundreds of
+  times, a skill or CLAUDE.md pointer could short-circuit some of
+  the invocations.
 
 ### MCP log scan (high-signal)
 
@@ -267,6 +385,17 @@ Score starts at 100. Deduct per issue:
 | **MCP logs:** per broken server (connect-fails every session) | -15 each |
 | **MCP logs:** per needs-auth user-configured server | -3 each |
 | **MCP logs:** per needs-auth built-in `claude.ai *` server | 0 (INFO only) |
+| Agent body > 200 lines | -5 each |
+| Agent body > 500 lines | -10 each |
+| Slash-command body > 200 lines | -3 each |
+| **Behavioral:** per unused agent (window) | -3 (cap -9) |
+| **Behavioral:** per unused plugin (window) | -5 |
+| **Behavioral:** per tool with error rate > 10% and > 20 calls | -5 each |
+| **Behavioral:** p95 turn cost > 150k | -5 |
+| **Behavioral:** p95 turn cost > 300k | additional -10 |
+| Ghost slash references in CLAUDE.md | -2 each (cap -10) |
+| CLAUDE.md stale (> 90d) AND correction rate > 15% | -10 |
+| Hooks counted > 10 in any scope | -5 |
 
 "Heavyweight" = servers that load significant tool schemas into every
 turn. Lazy-loaded auth stubs and 2-tool servers that show up under
@@ -287,10 +416,15 @@ Score: {N}/100 [{CLEAN|NEEDS WORK|BLOATED|CRITICAL}]
 ## Behavioral Scan ({days}d, {sessions} sessions, {turns} turns)
 Cache hit rate: {%}
 Autocompact: {N}/{total} sessions
+Turn cost: avg {k} / p95 {k} / p99 {k}
 Broken MCP servers: {list or "none"}
 Needs-auth MCP servers: {list or "none"}
 Unused MCP servers: {list or "none"}
 Unused skills: {list or "none"}
+Unused agents: {list or "none"}
+Tools with >10% error rate: {list or "none"}
+Top read paths: {top 5 file paths}
+Large tool results: {tool + bytes for top 3}
 Top tools: {top 5 by call count}
 
 ## Issues Found
@@ -319,9 +453,11 @@ Severity: CRITICAL > 10pts, WARNING 5–10pts, INFO < 5pts.
 After the report:
 
 "Want me to fix any of these? I can:
-- Show a cleaned-up CLAUDE.md with flagged rules removed
+- Show a cleaned-up CLAUDE.md with flagged rules removed, ghost refs
+  stripped, and stale imports removed
 - Add missing settings.json configs
 - Add permissions.deny rules for build artifacts
+- Prune stale permissions.allow rules that never matched in the window
 - Remove broken user-configured MCP servers — I'll run
   `claude mcp remove <name>` for each, or show the
   `~/.claude.json > mcpServers` diff
@@ -331,7 +467,10 @@ After the report:
   toggle individual ones from here, but you can turn each one off
   interactively via `/mcp`, or disable the whole group by adding
   `ENABLE_CLAUDEAI_MCP_SERVERS=false` to `settings.json > env`
-- Show which skills to compress or merge"
+- Show which skills / agents / commands to compress, merge, or remove
+- Disable unused plugins in `enabledPlugins`
+- Remove no-op hooks (common pattern: hook guarded only by an
+  `|| true` when an env var is unset)"
 
 Auto-apply settings.json and `permissions.deny` (safe, reversible).
 Show diffs for CLAUDE.md, skill bodies, and MCP disable/allowlist

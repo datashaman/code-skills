@@ -1,33 +1,13 @@
 ---
 name: audit-design
 description: >
-  Static design + accessibility audit for web UIs. Accepts a URL, a
-  local directory of HTML/CSS/JSX/TSX/Vue/Svelte, or both (plan vs
-  implementation). Every finding is mapped to the relevant WCAG 2.1
-  success criterion and rolled up into a per-criterion pass/fail
-  coverage matrix. Checks include: WCAG 1.4.3 contrast ratios on
-  every fg/bg pair; WCAG 1.4.1 color-only state signaling (success/
-  error/warning that relies on color alone, red+green pairings);
-  WCAG 1.1.1 image alt text; WCAG 1.2.2 video captions; WCAG 1.3.1 /
-  2.4.1 / 2.4.6 semantic structure (heading hierarchy, landmarks,
-  main region); WCAG 1.3.5 input autocomplete; WCAG 1.4.4 user zoom;
-  WCAG 2.1.1 keyboard accessibility (no clickable divs); WCAG 2.4.2
-  page title; WCAG 2.4.4 link purpose (no empty or "click here"
-  links); WCAG 2.4.7 focus indicators (outline:none without
-  :focus-visible); WCAG 2.5.5 target size; WCAG 3.1.1 html lang;
-  WCAG 3.3.2 / 4.1.2 form labels; WCAG 4.1.1 parsing via W3C HTML
-  validator. Also audits non-WCAG design hygiene: palette coherence,
-  typography scale and blacklisted fonts, spacing/radius scale,
-  AI-slop patterns (purple-violet gradients, 3-col feature grids,
-  icons in colored circles, centered everything, colored left-border
-  cards, emoji in headings, placeholder copy), microstandards
-  (OpenGraph, JSON-LD, microdata, RDFa), Tailwind clusters for
-  @apply extraction, component health (divitis, inline styles,
-  repeated DOM structures, oversize JSX/TSX), and W3C HTML+CSS
-  validator summary. Returns a 0–100 score with specific fixes — no
-  live browser, no code rewrites. Use when the user says "audit the
-  design", "WCAG audit", "accessibility check", "design audit", or
-  "/audit-design".
+  Static design + WCAG accessibility audit for web UIs. Accepts a URL
+  or local directory. Scores contrast, colour signalling, alt text,
+  semantic structure, keyboard access, and other WCAG criteria, plus
+  design hygiene (fonts, spacing, AI-slop patterns, component health).
+  Returns a 0–100 score with specific findings — no live browser needed.
+  Use when the user says "audit the design", "WCAG audit",
+  "accessibility check", or "design review".
 user-invocable: true
 ---
 

@@ -1,11 +1,13 @@
 # audit-design
 
-**Static design + WCAG accessibility audit** for web UIs. Built for
+**Design + WCAG accessibility audit** for web UIs. Built for
 developers who can't eyeball visual or accessibility problems
 (colorblindness, limited design experience, or just not designers).
-Every check is deterministic — contrast math, structural parse, regex
-pattern match — and every accessibility finding is mapped to the
-relevant WCAG 2.1 success criterion.
+Every accessibility finding is mapped to the relevant WCAG 2.1
+success criterion.
+
+For URLs, uses a live browser to render the page first — SPAs and
+dynamically-injected content are handled correctly.
 
 ## When to use
 
@@ -14,10 +16,10 @@ Good prompts: *audit the design*, *WCAG audit*, *accessibility check*,
 
 Run it on:
 
-- A **URL** you've deployed (uses static fetch; SPA shells are
-  detected and warned).
+- A **URL** you've deployed — rendered in a live browser, so SPAs
+  and client-rendered apps work correctly.
 - A **local directory** of HTML / CSS / JSX / TSX / Vue / Svelte
-  source.
+  source — static scan, no browser needed.
 - **Both**, for the plan-vs-implementation case — mockup source +
   live deploy. The report surfaces divergences (e.g. contrast failures
   that crept in during implementation, Tailwind clusters that never
@@ -85,16 +87,25 @@ data. Disable with `--no-validate` offline.
 
 ## How it works
 
-1. **Load source.** `--url` does an HTTP GET + fetches linked
-   stylesheets. SPAs (near-empty `<body>` post-script-strip) emit
-   a warning telling the user to switch to `--path` or
-   `/design-review`.
-2. **Parse CSS rules** with a lightweight brace tracker — handles
+**URL mode:**
+1. Navigate to the URL in a live browser (Chrome), take a screenshot.
+2. Extract rendered HTML (`document.documentElement.outerHTML`) and all
+   CSS rules (`document.styleSheets`) via JavaScript — CORS-blocked
+   sheets are skipped.
+3. Save to a temp directory and run the scanner against it.
+4. Check browser console for JS errors.
+
+**Path mode:**
+1. Walk the directory for HTML/CSS/JSX/TSX/Vue/Svelte files.
+2. Run the scanner directly against local files.
+
+**Both modes then:**
+1. **Parse CSS rules** with a lightweight brace tracker — handles
    nested `@media`, returns `(selector, body)` pairs for every rule.
-3. **Per-check functions** inspect CSS + HTML and emit finding dicts.
-4. **WCAG coverage** cross-references findings into the success-
+2. **Per-check functions** inspect CSS + HTML and emit finding dicts.
+3. **WCAG coverage** cross-references findings into the success-
    criteria matrix.
-5. **Score** (0–100) with weighted deductions; colorblind-critical
+4. **Score** (0–100) with weighted deductions; colorblind-critical
    criteria (contrast, color signaling) carry the heaviest weight.
 
 ## Arguments
@@ -113,9 +124,11 @@ report too:
 - Regex-based CSS parsing misses: runtime CSS variable resolution,
   inheritance chains, computed dark-mode colors, pre-compiled
   preprocessor output.
-- Static HTML fetch misses anything a client framework injects.
+- CSS extraction via `document.styleSheets` skips cross-origin sheets
+  blocked by CORS.
 - W3C validators are strict — not every error is a real bug, but
-  patterns repeating 5+ times usually are.
+  patterns repeating 5+ times usually are. Skipped in URL mode
+  (`--no-validate`).
 - Tailwind detection is heuristic (>40% shaped tokens); Bootstrap
   5 utilities can false-positive.
 
@@ -128,9 +141,6 @@ report too:
 
 ## Not in scope
 
-These need a live browser or a different kind of tool:
-
-- Live visual rendering, screenshots, before/after diffs
 - Design-system generation
 - Mockup / variant generation
 - Plan-mode critique of a plan-doc

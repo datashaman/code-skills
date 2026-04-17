@@ -60,7 +60,7 @@ fields: ["key", "summary", "priority", "labels", "assignee", "created", "resolut
 
 ### 2. Analyze each dimension
 
-For each area, produce a short analysis section using `jq` to aggregate the JSON output.
+For each area, produce a short analysis section by aggregating the returned issue data.
 
 #### Velocity & Throughput
 - Count completed issues per month: group `resolutiondate` by `YYYY-MM`
@@ -68,7 +68,6 @@ For each area, produce a short analysis section using `jq` to aggregate the JSON
 - Identify the trajectory: growing, stable, declining, erratic
 - Flag sharp drops or spikes and hypothesize causes (staff changes, release crunches, holidays)
 - Note current velocity relative to the period average
-- Cross-reference with sprint data from step 0 to show per-sprint throughput
 
 #### Backlog Health
 - Count total open issues, split by status (To Do vs In Progress)
@@ -105,7 +104,7 @@ Combine findings across all five dimensions:
 
 - **Danger zones**: Components with high bug counts AND old backlog items AND a single assignee. Highest-risk areas
 - **Team health signals**: Is velocity stable? Are issues distributed? Is knowledge shared or siloed?
-- **Process signals**: Are firefighting events increasing? Do bugs cluster after certain sprints?
+- **Process signals**: Are firefighting events increasing? Do bugs cluster around specific components or time periods?
 - **Backlog rot indicators**: Items bumped repeatedly but never done. Stale in-progress with no owner. Unestimated work aged 90d+
 
 ### 4. Generate the report
@@ -115,7 +114,7 @@ Write the report into the skill's own directory, under a subfolder named after t
 ```markdown
 # Jira Project Health Audit
 
-**Date**: [date] | **Project**: [key] | **Board**: [id] | **Window**: [since period] | **Total issues in window**: [count]
+**Date**: [date] | **Project**: [key] | **Window**: [since period] | **Total issues in window**: [count]
 
 ## Executive Summary
 

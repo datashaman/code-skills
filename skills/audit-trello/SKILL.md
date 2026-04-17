@@ -1,11 +1,9 @@
 ---
 name: audit-trello
 description: |
-  Trello board health audit. Queries five dimensions of card data to identify
-  throughput trends, backlog rot, blocker clusters, member concentration risk, and
-  overdue patterns — then cross-references findings to surface danger zones.
-  Use when: "audit trello", "board health", "backlog analysis", "team velocity",
-  "who owns this work", "what's overdue", "label patterns".
+  Trello board health audit. Identifies throughput trends, backlog rot, blocker
+  clusters, member concentration risk, and overdue patterns.
+  Use when asked to "audit trello", "board health", "backlog analysis", or "what's overdue".
 ---
 
 # Trello Board Health Audit

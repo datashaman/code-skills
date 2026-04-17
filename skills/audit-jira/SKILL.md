@@ -1,11 +1,9 @@
 ---
 name: audit-jira
 description: |
-  Jira project health audit. Queries five dimensions of work item data to identify
-  velocity trends, backlog rot, bug clusters, assignee concentration risk, and
-  firefighting patterns — then cross-references findings to surface danger zones.
-  Use when: "audit jira", "project health", "backlog analysis", "team velocity",
-  "who owns this work", "what keeps breaking", "sprint patterns".
+  Jira project health audit. Identifies velocity trends, backlog rot, bug clusters,
+  assignee concentration risk, and firefighting patterns.
+  Use when asked to "audit jira", "project health", "backlog analysis", or "team velocity".
 ---
 
 # Jira Project Health Audit

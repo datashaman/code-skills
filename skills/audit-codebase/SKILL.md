@@ -1,11 +1,9 @@
 ---
 name: audit-codebase
 description: |
-  Git-based codebase health audit. Runs five diagnostic git commands to identify
-  churn hotspots, bus factor risks, bug clusters, project momentum, and firefighting
-  patterns — then cross-references findings to surface danger zones.
-  Use when: "audit the codebase", "codebase health", "code archaeology",
-  "who owns this code", "what files change most", "bus factor".
+  Git-based codebase health audit. Identifies churn hotspots, bus factor risks,
+  bug clusters, and firefighting patterns from git history.
+  Use when asked to "audit the codebase", "codebase health", or "who owns this code".
 ---
 
 # Codebase Health Audit

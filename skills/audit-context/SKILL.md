@@ -1,18 +1,13 @@
 ---
 name: audit-context
 description: >
-  Audit your Claude Code setup for token waste and context bloat. Use when
-  the user says "audit my context", "check my settings", "why is Claude so
-  slow", "token optimization", "context audit", or runs /audit-context.
-  Starts by running /context to see real overhead, then audits MCP servers
-  (user-configured and built-in claude.ai), CLAUDE.md rules and imports,
-  skills, agents, slash commands, plugins, hooks, settings, and file
-  permissions. Mines session JSONL transcripts for behavioral signals:
-  cache hit rate, autocompact frequency, turn-cost percentiles, per-tool
-  error rates, unused skills/agents, repeated Read paths, and large
-  tool-result outliers. Cross-references MCP connection logs to catch
-  broken servers that load schemas but never connect. Returns a health
-  score with specific fixes.
+  Audit your Claude Code setup for token waste and context bloat. Checks
+  MCP servers, CLAUDE.md files, skills, agents, commands, plugins, hooks,
+  and permissions. Mines session transcripts for cache hit rate, autocompact
+  frequency, turn costs, tool errors, and unused assets. Flags broken MCP
+  servers that load schemas but never connect. Returns a health score with
+  specific fixes. Use when asked to "audit my context", "check my settings",
+  "token optimization", or "why is Claude slow".
 user-invocable: true
 ---
 

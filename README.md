@@ -34,7 +34,7 @@ Git-based codebase health audit. Runs five diagnostic git commands to identify c
 
 ### `/audit-design`
 
-Static design + WCAG accessibility audit for web UIs. Accepts a URL, a local directory of HTML/CSS/JSX/TSX/Vue/Svelte, or both (plan vs implementation). Every accessibility finding is mapped to a WCAG 2.1 success criterion and rolled up into a pass/fail matrix. Covers contrast ratios, color-only state signaling, semantic HTML structure (headings, landmarks, form labels, alt text, lang), microstandards (OpenGraph, JSON-LD, microdata, RDFa), Tailwind clusters that should be extracted via `@apply`, unhealthy component usage (divitis, clickable divs, inline styles, oversize JSX/TSX, repeated DOM structures), design hygiene (palette, typography, spacing scale, border-radius distribution), AI-slop patterns (purple-violet gradients, 3-col feature grids, icons in colored circles, centered everything, emoji in headings, placeholder copy), technical hygiene (outline:none, transition:all, viewport zoom-block, missing `<img>` dimensions, missing font-display), and a W3C HTML+CSS validator summary. Built for developers who can't eyeball visual problems (colorblindness, limited design experience).
+Design and WCAG accessibility audit for web UIs. For URLs, uses a live browser to render the page fully before scanning — handles SPAs and dynamically-injected content. For local directories, runs a static scan. Covers contrast ratios, color-only state signaling, semantic HTML structure (headings, landmarks, form labels, alt text, lang), microstandards (OpenGraph, JSON-LD), Tailwind clusters, component health (divitis, clickable divs, inline styles, oversize JSX/TSX, repeated DOM structures), design hygiene (palette, typography, spacing scale, border-radius distribution), AI-slop patterns (purple-violet gradients, 3-col feature grids, emoji in headings, placeholder copy), and a W3C HTML+CSS validator summary. Returns a 0–100 score with actionable findings.
 
 **Arguments:**
 - `url` (optional): Deployed URL to audit
@@ -61,17 +61,16 @@ Audit your Claude Code setup for token waste and context bloat. Starts from `/co
 
 Jira project health audit. Queries five dimensions of work item data to identify velocity trends, backlog rot, bug clusters, assignee concentration risk, and firefighting patterns — then cross-references findings to surface danger zones.
 
-**Prerequisites:** `acli` installed and authenticated (`acli jira auth`).
+**Prerequisites:** Atlassian MCP connected and authenticated.
 
 **Arguments:**
 - `project` (required): Jira project key (e.g. `ENG`, `PLAT`) — can be passed positionally
-- `since` (optional): Start date for completed-work analysis (default: `2025-01-01`)
-- `sprint` (optional): Sprint name or ID to scope velocity analysis (default: last 6 sprints)
+- `since` (optional): JQL date expression for the analysis window (default: `-52w`)
 
 **Usage:**
 ```
 /audit-jira ENG
-/audit-jira ENG since=2024-07-01
+/audit-jira ENG since=-26w
 ```
 
 ### `/audit-trello`

@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -m ruff check skills/ --fix --quiet && python3 -m ruff format skills/ --quiet"
+          }
+        ]
+      }
+    ]
+  }
+}

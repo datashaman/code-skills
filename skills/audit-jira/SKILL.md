@@ -1,8 +1,9 @@
 ---
 name: audit-jira
 description: |
-  Jira project health audit. Identifies velocity trends, backlog rot, bug clusters,
-  assignee concentration risk, and firefighting patterns.
+  Jira project health audit via the Atlassian MCP. Identifies velocity trends,
+  backlog rot, bug clusters, assignee concentration risk, and firefighting patterns.
+  Requires the Atlassian MCP to be connected.
   Use when asked to "audit jira", "project health", "backlog analysis", or "team velocity".
 ---
 
@@ -10,97 +11,51 @@ description: |
 
 Query five dimensions of Jira data to build a picture of team health, backlog quality, and delivery risk.
 
-Uses `acli` (Atlassian CLI). Install at https://developer.atlassian.com/cloud/acli/ and authenticate with `acli jira auth` before running.
-
-## Steps
-
-### -1. Check prerequisites
-
-Before doing anything else, verify `acli` is installed and authenticated:
-
-```bash
-which acli
-acli jira whoami
-```
-
-If `which acli` fails, guide the user through installation:
-
-1. **macOS (Homebrew)**: `brew install atlassian/acli/acli`
-2. **Direct download**: Visit https://developer.atlassian.com/cloud/acli/ and download the binary for their platform, then move it to `/usr/local/bin/acli` and run `chmod +x /usr/local/bin/acli`
-
-Once installed, run `acli jira auth` and follow the prompts:
-- It will ask for their Atlassian site URL (e.g. `https://mycompany.atlassian.net`)
-- Then open a browser to generate an API token at https://id.atlassian.com/manage-profile/security/api-tokens
-- Paste the token when prompted
-
-Do not proceed until `acli jira whoami` returns successfully.
+Uses the Atlassian MCP (`mcp__atlassian__*`). The user must have the Atlassian MCP connected and authenticated before running.
 
 ## Arguments
 
-- `project` (required): Jira project key (e.g. `ENG`, `PLAT`). Can be passed positionally as the first argument — `/audit-jira ENG` is equivalent to `/audit-jira project=ENG`.
-- `since` (optional): Start date for completed-work analysis in ISO format (default: `"1 year ago"`, expressed as a JQL date like `"-52w"`)
-- `board` (optional): Board ID to use for sprint analysis. If not provided, look it up via `acli jira board search --project $PROJECT --json`.
+- `project` (required): Jira project key (e.g. `ENG`, `PLAT`). Can be passed positionally — `/audit-jira ENG`.
+- `since` (optional): JQL date expression for the analysis window (default: `"-52w"`).
 
 ## Steps
 
-### 0. Resolve the board ID
+### 0. Resolve the cloud ID
 
-If the user did not provide a `board` argument, find it:
-
-```bash
-acli jira board search --project $PROJECT --json
-```
-
-Pick the first board ID from the results. If multiple boards exist, ask the user which one to use.
-
-Then fetch recent sprints for velocity bucketing:
-
-```bash
-acli jira board list-sprints --id $BOARD --state closed,active --limit 12 --json
-```
+Call `mcp__atlassian__getAccessibleAtlassianResources` to get the list of Atlassian sites. Use the `id` field of the first result as `cloudId` for all subsequent calls. If multiple sites are returned, ask the user which one to use.
 
 ### 1. Gather raw data
 
-Run all five queries in parallel using Bash. Use `--paginate` to get full result sets. Use `--json` for structured output and parse with `jq`.
+Call `mcp__atlassian__searchJiraIssuesUsingJql` for each of the five queries below. Use `maxResults: 100` and page via `nextPageToken` until exhausted for each query.
 
 **Velocity / throughput** — completed issues in the window:
-```bash
-acli jira workitem search \
-  --jql "project = $PROJECT AND statusCategory = Done AND resolutiondate >= $SINCE ORDER BY resolutiondate ASC" \
-  --fields "key,issuetype,assignee,priority,resolutiondate,labels,components" \
-  --paginate --json
+```
+jql: "project = $PROJECT AND statusCategory = Done AND resolutiondate >= $SINCE ORDER BY resolutiondate ASC"
+fields: ["key", "issuetype", "assignee", "priority", "resolutiondate", "labels", "components"]
 ```
 
 **Backlog health** — all open issues ordered oldest first:
-```bash
-acli jira workitem search \
-  --jql "project = $PROJECT AND statusCategory in ('To Do','In Progress') ORDER BY created ASC" \
-  --fields "key,issuetype,summary,assignee,priority,status,created,story_points,labels,components" \
-  --paginate --json
+```
+jql: "project = $PROJECT AND statusCategory in ('To Do', 'In Progress') ORDER BY created ASC"
+fields: ["key", "issuetype", "summary", "assignee", "priority", "status", "created", "labels", "components", "story_points"]
 ```
 
 **Bug clusters** — all bugs in the window:
-```bash
-acli jira workitem search \
-  --jql "project = $PROJECT AND issuetype = Bug AND created >= $SINCE ORDER BY created ASC" \
-  --fields "key,summary,assignee,priority,status,resolutiondate,labels,components,created" \
-  --paginate --json
+```
+jql: "project = $PROJECT AND issuetype = Bug AND created >= $SINCE ORDER BY created ASC"
+fields: ["key", "summary", "assignee", "priority", "status", "resolutiondate", "labels", "components", "created"]
 ```
 
 **Assignee concentration** — all issues in the window:
-```bash
-acli jira workitem search \
-  --jql "project = $PROJECT AND created >= $SINCE ORDER BY created ASC" \
-  --fields "key,issuetype,assignee,status,priority" \
-  --paginate --json
+```
+jql: "project = $PROJECT AND created >= $SINCE ORDER BY created ASC"
+fields: ["key", "issuetype", "assignee", "status", "priority"]
 ```
 
 **Firefighting patterns** — high-priority and escalation-labeled issues:
-```bash
-acli jira workitem search \
-  --jql "project = $PROJECT AND (priority in (Highest, High) OR labels in (hotfix, urgent, escalation, incident)) AND created >= $SINCE ORDER BY created DESC" \
-  --fields "key,summary,priority,labels,assignee,created,resolutiondate,status" \
-  --paginate --json
+```
+jql: "project = $PROJECT AND (priority in (Highest, High) OR labels in (hotfix, urgent, escalation, incident)) AND created >= $SINCE ORDER BY created DESC"
+fields: ["key", "summary", "priority", "labels", "assignee", "created", "resolutiondate", "status"]
 ```
 
 ### 2. Analyze each dimension

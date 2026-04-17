@@ -8,7 +8,12 @@ servers that are configured but not authenticated.
 
 Usage:  scan_mcp_logs.py [days=30]
 """
-import sys, os, json, glob, time
+
+import glob
+import json
+import os
+import sys
+import time
 
 
 def find_log_root(home, slug):
@@ -58,8 +63,9 @@ def main():
         cutoff = time.time() - days * 86400
         for d in sorted(glob.glob(os.path.join(root, "mcp-logs-*"))):
             server = os.path.basename(d).replace("mcp-logs-", "")
-            files = [f for f in glob.glob(os.path.join(d, "*.jsonl"))
-                     if os.path.getmtime(f) >= cutoff]
+            files = [
+                f for f in glob.glob(os.path.join(d, "*.jsonl")) if os.path.getmtime(f) >= cutoff
+            ]
             errors = conn_fail = 0
             for fp in files:
                 try:

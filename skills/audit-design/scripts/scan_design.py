@@ -38,8 +38,9 @@ Usage:
 
 Exactly one of --path or --url is required.
 """
+
 import argparse
-import io
+from collections import Counter, defaultdict
 import json
 import os
 import re
@@ -47,40 +48,47 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections import Counter, defaultdict
-
 
 # ---------------------------------------------------------------------------
 # Color utilities (WCAG 2.1 contrast)
 # ---------------------------------------------------------------------------
 
-HEX_RE = re.compile(r'#([0-9a-fA-F]{3,8})\b')
-RGB_RE = re.compile(
-    r'rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*[\d.]+\s*)?\)'
-)
-HSL_RE = re.compile(
-    r'hsla?\(\s*(\d+)\s*,\s*(\d+)%\s*,\s*(\d+)%\s*(?:,\s*[\d.]+\s*)?\)'
-)
+HEX_RE = re.compile(r"#([0-9a-fA-F]{3,8})\b")
+RGB_RE = re.compile(r"rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*[\d.]+\s*)?\)")
+HSL_RE = re.compile(r"hsla?\(\s*(\d+)\s*,\s*(\d+)%\s*,\s*(\d+)%\s*(?:,\s*[\d.]+\s*)?\)")
 
 NAMED_COLORS = {
-    "black": (0, 0, 0), "white": (255, 255, 255),
-    "red": (255, 0, 0), "green": (0, 128, 0), "lime": (0, 255, 0),
-    "blue": (0, 0, 255), "yellow": (255, 255, 0), "cyan": (0, 255, 255),
-    "magenta": (255, 0, 255), "silver": (192, 192, 192),
-    "gray": (128, 128, 128), "grey": (128, 128, 128),
-    "maroon": (128, 0, 0), "olive": (128, 128, 0),
-    "purple": (128, 0, 128), "teal": (0, 128, 128), "navy": (0, 0, 128),
-    "orange": (255, 165, 0), "pink": (255, 192, 203),
-    "rebeccapurple": (102, 51, 153), "indigo": (75, 0, 130),
-    "violet": (238, 130, 238), "transparent": None,
+    "black": (0, 0, 0),
+    "white": (255, 255, 255),
+    "red": (255, 0, 0),
+    "green": (0, 128, 0),
+    "lime": (0, 255, 0),
+    "blue": (0, 0, 255),
+    "yellow": (255, 255, 0),
+    "cyan": (0, 255, 255),
+    "magenta": (255, 0, 255),
+    "silver": (192, 192, 192),
+    "gray": (128, 128, 128),
+    "grey": (128, 128, 128),
+    "maroon": (128, 0, 0),
+    "olive": (128, 128, 0),
+    "purple": (128, 0, 128),
+    "teal": (0, 128, 128),
+    "navy": (0, 0, 128),
+    "orange": (255, 165, 0),
+    "pink": (255, 192, 203),
+    "rebeccapurple": (102, 51, 153),
+    "indigo": (75, 0, 130),
+    "violet": (238, 130, 238),
+    "transparent": None,
 }
 
 
 def parse_hex(h):
     if len(h) == 3:
-        h = ''.join(c * 2 for c in h)
+        h = "".join(c * 2 for c in h)
     elif len(h) == 4:
-        h = ''.join(c * 2 for c in h[:3])
+        h = "".join(c * 2 for c in h[:3])
     elif len(h) == 8:
         h = h[:6]
     elif len(h) != 6:
@@ -91,11 +99,11 @@ def parse_hex(h):
         return None
 
 
-def hsl_to_rgb(h, s, l):
-    s, l = s / 100.0, l / 100.0
-    c = (1 - abs(2 * l - 1)) * s
+def hsl_to_rgb(h, s, lightness):
+    s, lightness = s / 100.0, lightness / 100.0
+    c = (1 - abs(2 * lightness - 1)) * s
     x = c * (1 - abs((h / 60.0) % 2 - 1))
-    m = l - c / 2
+    m = lightness - c / 2
     if h < 60:
         r, g, b = c, x, 0
     elif h < 120:
@@ -149,6 +157,7 @@ def relative_luminance(rgb):
     def ch(c):
         c = c / 255.0
         return c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4
+
     r, g, b = rgb
     return 0.2126 * ch(r) + 0.7152 * ch(g) + 0.0722 * ch(b)
 
@@ -221,19 +230,17 @@ def load_from_url(url):
     spa_warning = False
     body_match = re.search(r"<body[^>]*>(.*?)</body>", html, re.DOTALL | re.IGNORECASE)
     if body_match:
-        body_text = re.sub(r"<script.*?</script>", "", body_match.group(1),
-                           flags=re.DOTALL | re.IGNORECASE)
+        body_text = re.sub(
+            r"<script.*?</script>", "", body_match.group(1), flags=re.DOTALL | re.IGNORECASE
+        )
         body_text = re.sub(r"<[^>]+>", "", body_text).strip()
         if len(body_text) < 200:
             spa_warning = True
 
     css_chunks = []
-    for m in re.finditer(r"<style[^>]*>(.*?)</style>", html,
-                         re.DOTALL | re.IGNORECASE):
+    for m in re.finditer(r"<style[^>]*>(.*?)</style>", html, re.DOTALL | re.IGNORECASE):
         css_chunks.append(m.group(1))
-    for m in re.finditer(
-        r'<link[^>]+rel=["\']?stylesheet["\']?[^>]*>', html, re.IGNORECASE
-    ):
+    for m in re.finditer(r'<link[^>]+rel=["\']?stylesheet["\']?[^>]*>', html, re.IGNORECASE):
         href_m = re.search(r'href=["\']([^"\']+)["\']', m.group(0))
         if not href_m:
             continue
@@ -258,8 +265,9 @@ def load_from_path(path):
     exts_css = {".css", ".scss", ".sass", ".less"}
     n_files = 0
     for root, _, files in os.walk(path):
-        if any(skip in root for skip in
-               ("/node_modules/", "/.git/", "/dist/", "/build/", "/.next/")):
+        if any(
+            skip in root for skip in ("/node_modules/", "/.git/", "/dist/", "/build/", "/.next/")
+        ):
             continue
         for f in files:
             fp = os.path.join(root, f)
@@ -273,8 +281,9 @@ def load_from_path(path):
                 n_files += 1
                 if ext in exts_html:
                     html_parts.append(content)
-                    for m in re.finditer(r"<style[^>]*>(.*?)</style>",
-                                         content, re.DOTALL | re.IGNORECASE):
+                    for m in re.finditer(
+                        r"<style[^>]*>(.*?)</style>", content, re.DOTALL | re.IGNORECASE
+                    ):
                         css_parts.append(m.group(1))
                 else:
                     css_parts.append(content)
@@ -291,6 +300,7 @@ def load_from_path(path):
 # ---------------------------------------------------------------------------
 # CSS rule parser (lightweight)
 # ---------------------------------------------------------------------------
+
 
 def iter_rules(css):
     """Yield (selector, body) for each CSS rule. Ignores @media nesting
@@ -325,9 +335,7 @@ def iter_rules(css):
 
 def get_decl(body, prop):
     """Return the last declaration value for `prop` in a rule body."""
-    pattern = re.compile(
-        rf'(?:^|;)\s*{re.escape(prop)}\s*:\s*([^;}}]+)', re.IGNORECASE
-    )
+    pattern = re.compile(rf"(?:^|;)\s*{re.escape(prop)}\s*:\s*([^;}}]+)", re.IGNORECASE)
     vals = pattern.findall(body)
     return vals[-1].strip() if vals else None
 
@@ -336,8 +344,15 @@ def get_decl(body, prop):
 # Checks
 # ---------------------------------------------------------------------------
 
-BLACKLIST_FONTS = {"papyrus", "comic sans", "comic sans ms", "lobster",
-                   "impact", "jokerman", "curlz mt"}
+BLACKLIST_FONTS = {
+    "papyrus",
+    "comic sans",
+    "comic sans ms",
+    "lobster",
+    "impact",
+    "jokerman",
+    "curlz mt",
+}
 GENERIC_FONTS = {"inter", "roboto", "open sans", "poppins"}
 
 SLOP_PLACEHOLDER_COPY = [
@@ -350,16 +365,15 @@ SLOP_PLACEHOLDER_COPY = [
 ]
 
 EMOJI_RE = re.compile(
-    "[" +
-    "\U0001F300-\U0001F5FF"  # symbols & pictographs
-    "\U0001F600-\U0001F64F"  # emoticons
-    "\U0001F680-\U0001F6FF"  # transport
-    "\U0001F700-\U0001F77F"
-    "\U0001F900-\U0001F9FF"
-    "\U0001FA00-\U0001FA6F"
-    "\U0001FA70-\U0001FAFF"
-    "\U00002700-\U000027BF"  # dingbats
-    "\U0001F1E0-\U0001F1FF"  # flags
+    "[" + "\U0001f300-\U0001f5ff"  # symbols & pictographs
+    "\U0001f600-\U0001f64f"  # emoticons
+    "\U0001f680-\U0001f6ff"  # transport
+    "\U0001f700-\U0001f77f"
+    "\U0001f900-\U0001f9ff"
+    "\U0001fa00-\U0001fa6f"
+    "\U0001fa70-\U0001faff"
+    "\U00002700-\U000027bf"  # dingbats
+    "\U0001f1e0-\U0001f1ff"  # flags
     "]+"
 )
 
@@ -388,14 +402,16 @@ def check_contrast(css):
         )
         required = 3.0 if is_large else 4.5
         if ratio < required:
-            findings.append({
-                "selector": sel[:120],
-                "fg": fg.strip()[:40],
-                "bg": bg.strip()[:40],
-                "ratio": round(ratio, 2),
-                "required": required,
-                "severity": "high" if ratio < 3.0 else "medium",
-            })
+            findings.append(
+                {
+                    "selector": sel[:120],
+                    "fg": fg.strip()[:40],
+                    "bg": bg.strip()[:40],
+                    "ratio": round(ratio, 2),
+                    "required": required,
+                    "severity": "high" if ratio < 3.0 else "medium",
+                }
+            )
     return findings
 
 
@@ -415,25 +431,29 @@ def check_color_signaling(css, html):
     for sel, body in iter_rules(css):
         if not STATE_CLASSES.search(sel):
             continue
-        has_color = bool(get_decl(body, "color") or
-                         get_decl(body, "background-color") or
-                         get_decl(body, "background"))
+        has_color = bool(
+            get_decl(body, "color")
+            or get_decl(body, "background-color")
+            or get_decl(body, "background")
+        )
         if not has_color:
             continue
         non_color_cues = bool(
-            re.search(r"::(before|after)", sel) or
-            get_decl(body, "border") or
-            get_decl(body, "border-left") or
-            get_decl(body, "border-color") or
-            get_decl(body, "text-decoration") or
-            get_decl(body, "font-weight")
+            re.search(r"::(before|after)", sel)
+            or get_decl(body, "border")
+            or get_decl(body, "border-left")
+            or get_decl(body, "border-color")
+            or get_decl(body, "text-decoration")
+            or get_decl(body, "font-weight")
         )
         if not non_color_cues:
-            findings.append({
-                "selector": sel[:120],
-                "note": "state class differentiated by color only — add icon, label, or border",
-                "severity": "high",
-            })
+            findings.append(
+                {
+                    "selector": sel[:120],
+                    "note": "state class differentiated by color only — add icon, label, or border",
+                    "severity": "high",
+                }
+            )
     # Red+green only combinations: look for sibling success/error pairs
     # using red and green hues without other cues.
     success_colors, error_colors = [], []
@@ -468,7 +488,6 @@ def check_palette(css):
 
 
 def check_typography(css, html):
-    findings = []
     families = []
     for m in re.finditer(r"font-family\s*:\s*([^;}\n]+)", css, re.IGNORECASE):
         families.append(m.group(1).strip())
@@ -499,15 +518,10 @@ def check_typography(css, html):
 
     # Straight quotes in heading text
     straight_quote_hits = 0
-    for m in re.finditer(r"<h[1-6][^>]*>(.*?)</h[1-6]>", html,
-                         re.DOTALL | re.IGNORECASE):
+    for m in re.finditer(r"<h[1-6][^>]*>(.*?)</h[1-6]>", html, re.DOTALL | re.IGNORECASE):
         text = re.sub(r"<[^>]+>", "", m.group(1))
         if '"' in text or "'" in text:
             straight_quote_hits += 1
-
-    # outline: none without focus-visible
-    outline_none = len(re.findall(r"outline\s*:\s*none", css, re.IGNORECASE))
-    focus_visible = len(re.findall(r":focus-visible", css))
 
     return {
         "unique_primary_families": len(primaries),
@@ -526,7 +540,8 @@ def check_spacing(css):
     for prop in ("padding", "margin", "gap"):
         for m in re.finditer(
             rf"\b{prop}(?:-(?:top|right|bottom|left|block|inline)[-\w]*)?\s*:\s*([^;}}]+)",
-            css, re.IGNORECASE,
+            css,
+            re.IGNORECASE,
         ):
             for tok in m.group(1).split():
                 pm = re.match(r"([\d.]+)px", tok)
@@ -569,50 +584,70 @@ def check_ai_slop(css, html):
 
     # purple/violet gradients
     if PURPLE_GRADIENT_RE.search(css):
-        findings.append({"pattern": "purple/violet/indigo gradient",
-                         "severity": "polish",
-                         "note": "AI-slop tell; swap for a specific brand color"})
+        findings.append(
+            {
+                "pattern": "purple/violet/indigo gradient",
+                "severity": "polish",
+                "note": "AI-slop tell; swap for a specific brand color",
+            }
+        )
 
     # 3-column symmetric grid (soft signal)
     if re.search(r"grid-template-columns\s*:\s*repeat\(\s*3\s*,\s*1fr\)", css):
-        findings.append({"pattern": "repeat(3, 1fr) grid",
-                         "severity": "polish",
-                         "note": "Could be the SaaS-starter feature grid. Check content, not layout."})
+        findings.append(
+            {
+                "pattern": "repeat(3, 1fr) grid",
+                "severity": "polish",
+                "note": "Could be the SaaS-starter feature grid. Check content, not layout.",
+            }
+        )
 
     # text-align: center frequency
     center_count = len(re.findall(r"text-align\s*:\s*center", css, re.IGNORECASE))
     align_total = len(re.findall(r"text-align\s*:", css, re.IGNORECASE))
     center_ratio = center_count / align_total if align_total else 0
     if align_total >= 5 and center_ratio > 0.5:
-        findings.append({
-            "pattern": f"text-align: center used in {center_count}/{align_total} rules",
-            "severity": "medium",
-            "note": "Centering everything is a common AI-slop tell; use sparingly for hierarchy.",
-        })
+        findings.append(
+            {
+                "pattern": f"text-align: center used in {center_count}/{align_total} rules",
+                "severity": "medium",
+                "note": "Centering everything is a common AI-slop tell; use sparingly for hierarchy.",
+            }
+        )
 
     # colored left-border cards
-    left_border = len(re.findall(
-        r"border-left\s*:\s*\d+(?:px|rem)?\s+solid\s+(?!transparent|currentcolor)",
-        css, re.IGNORECASE,
-    ))
+    left_border = len(
+        re.findall(
+            r"border-left\s*:\s*\d+(?:px|rem)?\s+solid\s+(?!transparent|currentcolor)",
+            css,
+            re.IGNORECASE,
+        )
+    )
     if left_border >= 2:
-        findings.append({
-            "pattern": f"colored border-left on {left_border} rules",
-            "severity": "polish",
-            "note": "The 'accent stripe card' is an AI-slop signature.",
-        })
+        findings.append(
+            {
+                "pattern": f"colored border-left on {left_border} rules",
+                "severity": "polish",
+                "note": "The 'accent stripe card' is an AI-slop signature.",
+            }
+        )
 
     # icons in colored circles
-    circle_icon = len(re.findall(
-        r"border-radius\s*:\s*50%[^}]*background(?:-color)?\s*:",
-        css, re.IGNORECASE | re.DOTALL,
-    ))
+    circle_icon = len(
+        re.findall(
+            r"border-radius\s*:\s*50%[^}]*background(?:-color)?\s*:",
+            css,
+            re.IGNORECASE | re.DOTALL,
+        )
+    )
     if circle_icon >= 3:
-        findings.append({
-            "pattern": f"{circle_icon} rules with border-radius:50% + background color (icon-in-circle)",
-            "severity": "polish",
-            "note": "Symptom of the 3-col feature grid aesthetic.",
-        })
+        findings.append(
+            {
+                "pattern": f"{circle_icon} rules with border-radius:50% + background color (icon-in-circle)",
+                "severity": "polish",
+                "note": "Symptom of the 3-col feature grid aesthetic.",
+            }
+        )
 
     # uniform bubbly radius
     radius_values = []
@@ -621,11 +656,13 @@ def check_ai_slop(css, html):
     if radius_values:
         common, count = Counter(radius_values).most_common(1)[0]
         if count >= 5 and count / len(radius_values) > 0.6:
-            findings.append({
-                "pattern": f"border-radius '{common}' used in {count}/{len(radius_values)} rules",
-                "severity": "polish",
-                "note": "Uniform radius across element types = bubbly AI look. Use a radius scale.",
-            })
+            findings.append(
+                {
+                    "pattern": f"border-radius '{common}' used in {count}/{len(radius_values)} rules",
+                    "severity": "polish",
+                    "note": "Uniform radius across element types = bubbly AI look. Use a radius scale.",
+                }
+            )
 
     # emoji in headings
     emoji_in_headings = 0
@@ -634,11 +671,13 @@ def check_ai_slop(css, html):
         if EMOJI_RE.search(text):
             emoji_in_headings += 1
     if emoji_in_headings:
-        findings.append({
-            "pattern": f"emoji in {emoji_in_headings} headings",
-            "severity": "polish",
-            "note": "Emoji as design decoration reads as lazy/AI-generated.",
-        })
+        findings.append(
+            {
+                "pattern": f"emoji in {emoji_in_headings} headings",
+                "severity": "polish",
+                "note": "Emoji as design decoration reads as lazy/AI-generated.",
+            }
+        )
 
     # placeholder copy
     copy_hits = []
@@ -649,11 +688,13 @@ def check_ai_slop(css, html):
         if re.search(pattern, text_only, re.IGNORECASE):
             copy_hits.append(pattern)
     if copy_hits:
-        findings.append({
-            "pattern": "placeholder/generic hero copy",
-            "severity": "high",
-            "note": f"Matched: {', '.join(copy_hits)}. Rewrite with concrete, specific copy.",
-        })
+        findings.append(
+            {
+                "pattern": "placeholder/generic hero copy",
+                "severity": "high",
+                "note": f"Matched: {', '.join(copy_hits)}. Rewrite with concrete, specific copy.",
+            }
+        )
 
     return findings
 
@@ -665,48 +706,61 @@ def check_hygiene(css, html):
     outline_none = len(re.findall(r"outline\s*:\s*(?:none|0)", css, re.IGNORECASE))
     focus_visible = len(re.findall(r":focus-visible", css))
     if outline_none and focus_visible == 0:
-        issues.append({
-            "issue": f"outline:none used {outline_none}x but no :focus-visible styles found",
-            "severity": "high",
-            "note": "Keyboard users lose focus indicator. Pair every outline:none with a :focus-visible replacement.",
-        })
+        issues.append(
+            {
+                "issue": f"outline:none used {outline_none}x but no :focus-visible styles found",
+                "severity": "high",
+                "note": "Keyboard users lose focus indicator. Pair every outline:none with a :focus-visible replacement.",
+            }
+        )
 
     if re.search(r"transition\s*:\s*all\b", css, re.IGNORECASE):
-        issues.append({
-            "issue": "transition: all",
-            "severity": "medium",
-            "note": "Animates layout properties too; causes jank. List specific properties.",
-        })
+        issues.append(
+            {
+                "issue": "transition: all",
+                "severity": "medium",
+                "note": "Animates layout properties too; causes jank. List specific properties.",
+            }
+        )
 
-    if re.search(r'user-scalable\s*=\s*["\']?no', html, re.IGNORECASE) or \
-       re.search(r'maximum-scale\s*=\s*["\']?1', html, re.IGNORECASE):
-        issues.append({
-            "issue": "viewport blocks user zoom",
-            "severity": "high",
-            "note": "Accessibility regression — remove user-scalable=no / maximum-scale=1.",
-        })
+    if re.search(r'user-scalable\s*=\s*["\']?no', html, re.IGNORECASE) or re.search(
+        r'maximum-scale\s*=\s*["\']?1', html, re.IGNORECASE
+    ):
+        issues.append(
+            {
+                "issue": "viewport blocks user zoom",
+                "severity": "high",
+                "note": "Accessibility regression — remove user-scalable=no / maximum-scale=1.",
+            }
+        )
 
     # <img> missing dimensions
     img_tags = re.findall(r"<img\b[^>]*>", html, re.IGNORECASE)
-    missing = [t for t in img_tags
-               if not (re.search(r"\bwidth\s*=", t) and re.search(r"\bheight\s*=", t))]
+    missing = [
+        t for t in img_tags if not (re.search(r"\bwidth\s*=", t) and re.search(r"\bheight\s*=", t))
+    ]
     if img_tags:
-        issues.append({
-            "issue": f"{len(missing)}/{len(img_tags)} <img> tags missing width+height",
-            "severity": "medium" if missing else "info",
-            "note": "Set explicit dimensions to prevent CLS.",
-        })
+        issues.append(
+            {
+                "issue": f"{len(missing)}/{len(img_tags)} <img> tags missing width+height",
+                "severity": "medium" if missing else "info",
+                "note": "Set explicit dimensions to prevent CLS.",
+            }
+        )
 
     # @font-face without font-display: swap
     font_face_blocks = re.findall(r"@font-face\s*\{[^}]*\}", css, re.IGNORECASE | re.DOTALL)
-    missing_swap = [b for b in font_face_blocks
-                    if not re.search(r"font-display\s*:\s*swap", b, re.IGNORECASE)]
+    missing_swap = [
+        b for b in font_face_blocks if not re.search(r"font-display\s*:\s*swap", b, re.IGNORECASE)
+    ]
     if font_face_blocks:
-        issues.append({
-            "issue": f"{len(missing_swap)}/{len(font_face_blocks)} @font-face blocks missing font-display: swap",
-            "severity": "medium" if missing_swap else "info",
-            "note": "Without swap, users see FOIT (invisible text) until the font loads.",
-        })
+        issues.append(
+            {
+                "issue": f"{len(missing_swap)}/{len(font_face_blocks)} @font-face blocks missing font-display: swap",
+                "severity": "medium" if missing_swap else "info",
+                "note": "Without swap, users see FOIT (invisible text) until the font loads.",
+            }
+        )
 
     return issues
 
@@ -726,12 +780,21 @@ def check_semantics(html):
 
     h1_count = heading_levels.count(1)
     if h1_count == 0 and heading_levels:
-        findings.append({"issue": "no <h1>", "severity": "high",
-                         "note": "Every page needs exactly one h1 stating its purpose."})
+        findings.append(
+            {
+                "issue": "no <h1>",
+                "severity": "high",
+                "note": "Every page needs exactly one h1 stating its purpose.",
+            }
+        )
     elif h1_count > 1:
-        findings.append({"issue": f"{h1_count} <h1> tags",
-                         "severity": "medium",
-                         "note": "Use one h1 per page; demote the rest to h2."})
+        findings.append(
+            {
+                "issue": f"{h1_count} <h1> tags",
+                "severity": "medium",
+                "note": "Use one h1 per page; demote the rest to h2.",
+            }
+        )
 
     skipped = []
     last = 0
@@ -740,26 +803,30 @@ def check_semantics(html):
             skipped.append(f"h{last}→h{lv}")
         last = lv
     if skipped:
-        findings.append({"issue": f"heading levels skipped: {', '.join(skipped[:5])}",
-                         "severity": "medium",
-                         "note": "Screen readers announce hierarchy; don't jump levels."})
+        findings.append(
+            {
+                "issue": f"heading levels skipped: {', '.join(skipped[:5])}",
+                "severity": "medium",
+                "note": "Screen readers announce hierarchy; don't jump levels.",
+            }
+        )
 
-    present_landmarks = [t for t in LANDMARKS
-                         if re.search(rf"<{t}\b", html, re.IGNORECASE)]
+    present_landmarks = [t for t in LANDMARKS if re.search(rf"<{t}\b", html, re.IGNORECASE)]
     missing_landmarks = [t for t in LANDMARKS if t not in present_landmarks]
     if "main" in missing_landmarks and html.strip():
-        findings.append({"issue": "no <main> landmark",
-                         "severity": "high",
-                         "note": "Screen readers use <main> as a 'skip to content' target."})
+        findings.append(
+            {
+                "issue": "no <main> landmark",
+                "severity": "high",
+                "note": "Screen readers use <main> as a 'skip to content' target.",
+            }
+        )
 
-    present_sectioning = [t for t in SECTIONING
-                          if re.search(rf"<{t}\b", html, re.IGNORECASE)]
+    present_sectioning = [t for t in SECTIONING if re.search(rf"<{t}\b", html, re.IGNORECASE)]
 
     # Form inputs without labels or aria-label
     unlabeled_inputs = 0
-    for m in re.finditer(
-        r"<(input|textarea|select)\b([^>]*)>", html, re.IGNORECASE
-    ):
+    for m in re.finditer(r"<(input|textarea|select)\b([^>]*)>", html, re.IGNORECASE):
         attrs = m.group(2)
         # Skip non-form inputs
         itype = re.search(r'type\s*=\s*["\']?(\w+)', attrs)
@@ -773,15 +840,20 @@ def check_semantics(html):
         elif has_id:
             if re.search(
                 rf'<label\b[^>]*for\s*=\s*["\']{re.escape(has_id.group(1))}["\']',
-                html, re.IGNORECASE,
+                html,
+                re.IGNORECASE,
             ):
                 labeled = True
         if not labeled:
             unlabeled_inputs += 1
     if unlabeled_inputs:
-        findings.append({"issue": f"{unlabeled_inputs} form inputs without <label> or aria-label",
-                         "severity": "high",
-                         "note": "Unlabeled inputs fail screen readers and Safari autofill heuristics."})
+        findings.append(
+            {
+                "issue": f"{unlabeled_inputs} form inputs without <label> or aria-label",
+                "severity": "high",
+                "note": "Unlabeled inputs fail screen readers and Safari autofill heuristics.",
+            }
+        )
 
     # <img> missing alt
     img_no_alt = 0
@@ -789,26 +861,38 @@ def check_semantics(html):
         if not re.search(r"\balt\s*=", m.group(1)):
             img_no_alt += 1
     if img_no_alt:
-        findings.append({"issue": f"{img_no_alt} <img> tags missing alt",
-                         "severity": "high",
-                         "note": "Use alt='' for decorative images, alt='description' otherwise."})
+        findings.append(
+            {
+                "issue": f"{img_no_alt} <img> tags missing alt",
+                "severity": "high",
+                "note": "Use alt='' for decorative images, alt='description' otherwise.",
+            }
+        )
 
     # Lang attribute
-    if html.strip() and not re.search(r'<html\b[^>]*\blang\s*=', html, re.IGNORECASE):
-        findings.append({"issue": "no lang attribute on <html>",
-                         "severity": "medium",
-                         "note": "Screen readers + translation tools need it; add <html lang='en'>."})
+    if html.strip() and not re.search(r"<html\b[^>]*\blang\s*=", html, re.IGNORECASE):
+        findings.append(
+            {
+                "issue": "no lang attribute on <html>",
+                "severity": "medium",
+                "note": "Screen readers + translation tools need it; add <html lang='en'>.",
+            }
+        )
 
     # Microstandards detection
     standards = {
         "opengraph": bool(re.search(r'<meta[^>]+property=["\']og:', html, re.IGNORECASE)),
         "twitter_card": bool(re.search(r'<meta[^>]+name=["\']twitter:', html, re.IGNORECASE)),
-        "json_ld": bool(re.search(r'<script[^>]+type=["\']application/ld\+json', html, re.IGNORECASE)),
-        "microdata": bool(re.search(r'\bitemscope\b', html, re.IGNORECASE)),
-        "rdfa": bool(re.search(r'\b(?:vocab|typeof|property)\s*=', html)),
-        "schema_org": bool(re.search(r'schema\.org', html, re.IGNORECASE)),
+        "json_ld": bool(
+            re.search(r'<script[^>]+type=["\']application/ld\+json', html, re.IGNORECASE)
+        ),
+        "microdata": bool(re.search(r"\bitemscope\b", html, re.IGNORECASE)),
+        "rdfa": bool(re.search(r"\b(?:vocab|typeof|property)\s*=", html)),
+        "schema_org": bool(re.search(r"schema\.org", html, re.IGNORECASE)),
         "canonical": bool(re.search(r'<link[^>]+rel=["\']canonical', html, re.IGNORECASE)),
-        "favicon": bool(re.search(r'<link[^>]+rel=["\'](?:icon|shortcut icon)', html, re.IGNORECASE)),
+        "favicon": bool(
+            re.search(r'<link[^>]+rel=["\'](?:icon|shortcut icon)', html, re.IGNORECASE)
+        ),
         "theme_color": bool(re.search(r'<meta[^>]+name=["\']theme-color', html, re.IGNORECASE)),
         "viewport": bool(re.search(r'<meta[^>]+name=["\']viewport', html, re.IGNORECASE)),
     }
@@ -817,12 +901,16 @@ def check_semantics(html):
     suggestions = []
     lower = html.lower()
     if not standards["opengraph"]:
-        suggestions.append("OpenGraph meta tags (og:title, og:description, og:image) — controls link previews on social + chat apps.")
+        suggestions.append(
+            "OpenGraph meta tags (og:title, og:description, og:image) — controls link previews on social + chat apps."
+        )
     if not standards["json_ld"] and any(
-        k in lower for k in ("article", "product", "price", "recipe", "event",
-                             "<time", "author", "breadcrumb")
+        k in lower
+        for k in ("article", "product", "price", "recipe", "event", "<time", "author", "breadcrumb")
     ):
-        suggestions.append("JSON-LD with schema.org — content looks like it has a real type (Article, Product, Event, Recipe). Structured data drives rich-result eligibility.")
+        suggestions.append(
+            "JSON-LD with schema.org — content looks like it has a real type (Article, Product, Event, Recipe). Structured data drives rich-result eligibility."
+        )
     if not standards["canonical"]:
         suggestions.append("<link rel='canonical'> — prevents duplicate-content SEO hits.")
     if not standards["theme_color"]:
@@ -844,24 +932,113 @@ def check_semantics(html):
 # ---------------------------------------------------------------------------
 
 TW_PREFIXES = (
-    "bg", "text", "border", "rounded", "shadow", "ring", "outline",
-    "p", "px", "py", "pt", "pr", "pb", "pl", "ps", "pe",
-    "m", "mx", "my", "mt", "mr", "mb", "ml", "ms", "me",
-    "w", "h", "min-w", "min-h", "max-w", "max-h", "size",
-    "gap", "space-x", "space-y", "divide-x", "divide-y",
-    "flex", "grid", "items", "justify", "self", "place",
-    "col", "row", "col-span", "row-span", "col-start", "col-end",
-    "order", "content",
-    "font", "tracking", "leading", "decoration", "underline",
-    "whitespace", "break", "truncate", "line-clamp",
-    "opacity", "z", "top", "right", "bottom", "left", "inset",
-    "translate-x", "translate-y", "rotate", "scale", "skew", "origin",
-    "transform", "transition", "duration", "ease", "animate", "delay",
-    "cursor", "select", "pointer-events", "resize", "scroll",
-    "list", "fill", "stroke", "placeholder", "accent", "caret",
-    "backdrop", "filter", "blur", "brightness", "contrast",
-    "block", "inline", "hidden", "static", "fixed", "absolute", "relative", "sticky",
-    "overflow", "overflow-x", "overflow-y", "object",
+    "bg",
+    "text",
+    "border",
+    "rounded",
+    "shadow",
+    "ring",
+    "outline",
+    "p",
+    "px",
+    "py",
+    "pt",
+    "pr",
+    "pb",
+    "pl",
+    "ps",
+    "pe",
+    "m",
+    "mx",
+    "my",
+    "mt",
+    "mr",
+    "mb",
+    "ml",
+    "ms",
+    "me",
+    "w",
+    "h",
+    "min-w",
+    "min-h",
+    "max-w",
+    "max-h",
+    "size",
+    "gap",
+    "space-x",
+    "space-y",
+    "divide-x",
+    "divide-y",
+    "flex",
+    "grid",
+    "items",
+    "justify",
+    "self",
+    "place",
+    "col",
+    "row",
+    "col-span",
+    "row-span",
+    "col-start",
+    "col-end",
+    "order",
+    "content",
+    "font",
+    "tracking",
+    "leading",
+    "decoration",
+    "underline",
+    "whitespace",
+    "break",
+    "truncate",
+    "line-clamp",
+    "opacity",
+    "z",
+    "top",
+    "right",
+    "bottom",
+    "left",
+    "inset",
+    "translate-x",
+    "translate-y",
+    "rotate",
+    "scale",
+    "skew",
+    "origin",
+    "transform",
+    "transition",
+    "duration",
+    "ease",
+    "animate",
+    "delay",
+    "cursor",
+    "select",
+    "pointer-events",
+    "resize",
+    "scroll",
+    "list",
+    "fill",
+    "stroke",
+    "placeholder",
+    "accent",
+    "caret",
+    "backdrop",
+    "filter",
+    "blur",
+    "brightness",
+    "contrast",
+    "block",
+    "inline",
+    "hidden",
+    "static",
+    "fixed",
+    "absolute",
+    "relative",
+    "sticky",
+    "overflow",
+    "overflow-x",
+    "overflow-y",
+    "object",
     "aspect",
 )
 
@@ -875,9 +1052,18 @@ TW_PREFIX_RE = re.compile(
 
 def looks_tailwind(cls):
     return bool(TW_PREFIX_RE.match(cls)) or cls in (
-        "container", "prose", "sr-only", "not-sr-only", "antialiased",
-        "subpixel-antialiased", "italic", "underline", "uppercase",
-        "lowercase", "capitalize", "truncate",
+        "container",
+        "prose",
+        "sr-only",
+        "not-sr-only",
+        "antialiased",
+        "subpixel-antialiased",
+        "italic",
+        "underline",
+        "uppercase",
+        "lowercase",
+        "capitalize",
+        "truncate",
     )
 
 
@@ -902,8 +1088,12 @@ def check_tailwind(html, css):
         if tw_in >= 3:
             cluster_sizes.append(tw_in)
         if tw_in >= 12:
-            worst.append({"class_count": tw_in,
-                          "tokens": " ".join(tokens[:20]) + ("…" if len(tokens) > 20 else "")})
+            worst.append(
+                {
+                    "class_count": tw_in,
+                    "tokens": " ".join(tokens[:20]) + ("…" if len(tokens) > 20 else ""),
+                }
+            )
 
     tw_ratio = tw_tokens / total_tokens if total_tokens else 0
     detected = tw_ratio > 0.4 and tw_tokens >= 20
@@ -942,8 +1132,18 @@ def check_tailwind(html, css):
 # ---------------------------------------------------------------------------
 
 GENERIC_LINK_TEXT = {
-    "click here", "here", "read more", "more", "learn more", "this",
-    "this link", "link", "continue", "details", "go", "info",
+    "click here",
+    "here",
+    "read more",
+    "more",
+    "learn more",
+    "this",
+    "this link",
+    "link",
+    "continue",
+    "details",
+    "go",
+    "info",
 }
 
 
@@ -954,12 +1154,14 @@ def check_wcag_extras(html, css):
     # 2.4.2 Page Titled
     title_m = re.search(r"<title\b[^>]*>(.*?)</title>", html, re.DOTALL | re.IGNORECASE)
     if html.strip() and (not title_m or not title_m.group(1).strip()):
-        findings.append({
-            "wcag": "2.4.2",
-            "issue": "missing or empty <title>",
-            "severity": "high",
-            "note": "The <title> is the first thing screen readers announce and what shows in tabs/bookmarks.",
-        })
+        findings.append(
+            {
+                "wcag": "2.4.2",
+                "issue": "missing or empty <title>",
+                "severity": "high",
+                "note": "The <title> is the first thing screen readers announce and what shows in tabs/bookmarks.",
+            }
+        )
 
     # 2.4.4 Link Purpose — generic/empty anchor text
     generic_links = 0
@@ -978,37 +1180,44 @@ def check_wcag_extras(html, css):
         elif inner in GENERIC_LINK_TEXT:
             generic_links += 1
     if empty_links:
-        findings.append({
-            "wcag": "2.4.4",
-            "issue": f"{empty_links} <a> tags with no accessible text",
-            "severity": "high",
-            "note": "Empty links are invisible to screen readers. Add text content, aria-label, or alt on the inner image.",
-        })
+        findings.append(
+            {
+                "wcag": "2.4.4",
+                "issue": f"{empty_links} <a> tags with no accessible text",
+                "severity": "high",
+                "note": "Empty links are invisible to screen readers. Add text content, aria-label, or alt on the inner image.",
+            }
+        )
     if generic_links >= 2:
-        findings.append({
-            "wcag": "2.4.4",
-            "issue": f'{generic_links} generic link texts ("click here", "read more", etc.)',
-            "severity": "medium",
-            "note": "Screen reader users often tab through links in isolation; generic text tells them nothing.",
-        })
+        findings.append(
+            {
+                "wcag": "2.4.4",
+                "issue": f'{generic_links} generic link texts ("click here", "read more", etc.)',
+                "severity": "medium",
+                "note": "Screen reader users often tab through links in isolation; generic text tells them nothing.",
+            }
+        )
 
     # 1.2.2 Captions — <video> without <track>
     videos = re.findall(r"<video\b(.*?)</video>", html, re.DOTALL | re.IGNORECASE)
     video_no_track = sum(1 for v in videos if "<track" not in v.lower())
     if video_no_track:
-        findings.append({
-            "wcag": "1.2.2",
-            "issue": f"{video_no_track} <video> without <track> (captions)",
-            "severity": "high",
-            "note": "Video needs captions for deaf/HoH users. Add <track kind='captions'> at minimum.",
-        })
+        findings.append(
+            {
+                "wcag": "1.2.2",
+                "issue": f"{video_no_track} <video> without <track> (captions)",
+                "severity": "high",
+                "note": "Video needs captions for deaf/HoH users. Add <track kind='captions'> at minimum.",
+            }
+        )
 
     # 2.5.5 Target Size — explicit height < 44px on buttons/anchors
     small_targets = []
     for sel, body in iter_rules(css):
         if not re.search(
             r"(?:^|,|\s)(?:button|a|input\[type=[\"']?(?:button|submit|reset)[\"']?\]|\.btn|\.button)\b",
-            sel, re.IGNORECASE,
+            sel,
+            re.IGNORECASE,
         ):
             continue
         for prop in ("height", "min-height"):
@@ -1017,20 +1226,24 @@ def check_wcag_extras(html, css):
                 continue
             m = re.match(r"([\d.]+)px", val.strip())
             if m and float(m.group(1)) < 44:
-                small_targets.append({
-                    "selector": sel[:80],
-                    "prop": prop,
-                    "value": val.strip(),
-                })
+                small_targets.append(
+                    {
+                        "selector": sel[:80],
+                        "prop": prop,
+                        "value": val.strip(),
+                    }
+                )
                 break
     if small_targets:
-        findings.append({
-            "wcag": "2.5.5",
-            "issue": f"{len(small_targets)} interactive rule(s) with height < 44px",
-            "severity": "medium",
-            "note": "WCAG 2.5.5 (AAA) asks for 44×44px minimum; 2.5.8 (AA, WCAG 2.2) asks for 24×24px. Buttons smaller than 44px are hard to tap on mobile.",
-            "examples": small_targets[:3],
-        })
+        findings.append(
+            {
+                "wcag": "2.5.5",
+                "issue": f"{len(small_targets)} interactive rule(s) with height < 44px",
+                "severity": "medium",
+                "note": "WCAG 2.5.5 (AAA) asks for 44×44px minimum; 2.5.8 (AA, WCAG 2.2) asks for 24×24px. Buttons smaller than 44px are hard to tap on mobile.",
+                "examples": small_targets[:3],
+            }
+        )
 
     # 1.3.5 Identify Input Purpose — inputs missing autocomplete
     common_inputs = 0
@@ -1047,12 +1260,14 @@ def check_wcag_extras(html, css):
         if not re.search(r"\bautocomplete\s*=", attrs):
             no_autocomplete += 1
     if common_inputs >= 3 and no_autocomplete / common_inputs >= 0.5:
-        findings.append({
-            "wcag": "1.3.5",
-            "issue": f"{no_autocomplete}/{common_inputs} form inputs missing autocomplete attribute",
-            "severity": "medium",
-            "note": "autocomplete='email' / 'given-name' / 'tel' etc. lets browsers + assistive tech fill the right info.",
-        })
+        findings.append(
+            {
+                "wcag": "1.3.5",
+                "issue": f"{no_autocomplete}/{common_inputs} form inputs missing autocomplete attribute",
+                "severity": "medium",
+                "note": "autocomplete='email' / 'given-name' / 'tel' etc. lets browsers + assistive tech fill the right info.",
+            }
+        )
 
     return findings
 
@@ -1109,7 +1324,7 @@ def wcag_coverage(results):
             fails_by_wcag["3.1.1"].append(f)
     for f in results.get("components", {}).get("findings", []):
         issue = f.get("issue", "")
-        if "clickable" in issue or "role=\"button\"" in issue or "onClick" in issue:
+        if "clickable" in issue or 'role="button"' in issue or "onClick" in issue:
             fails_by_wcag["2.1.1"].append(f)
             fails_by_wcag["4.1.2"].append(f)
     for f in results["hygiene"]:
@@ -1124,8 +1339,11 @@ def wcag_coverage(results):
             fails_by_wcag[wc].append(f)
 
     # HTML validator counts for 4.1.1
-    html_val = results.get("validation", {}).get("html", {}) if isinstance(
-        results.get("validation"), dict) else {}
+    html_val = (
+        results.get("validation", {}).get("html", {})
+        if isinstance(results.get("validation"), dict)
+        else {}
+    )
     html_errs = html_val.get("errors", 0) if isinstance(html_val, dict) else 0
     if html_errs:
         fails_by_wcag["4.1.1"].append({"issue": f"{html_errs} W3C HTML errors"})
@@ -1134,11 +1352,13 @@ def wcag_coverage(results):
     for wc, desc in WCAG_CATALOG.items():
         fs = fails_by_wcag.get(wc, [])
         if wc in ("1.4.10", "1.4.12"):
-            coverage[wc] = {"description": desc, "status": "not-checked",
-                            "reason": "requires a live browser"}
+            coverage[wc] = {
+                "description": desc,
+                "status": "not-checked",
+                "reason": "requires a live browser",
+            }
         elif fs:
-            coverage[wc] = {"description": desc, "status": "fail",
-                            "fail_count": len(fs)}
+            coverage[wc] = {"description": desc, "status": "fail", "fail_count": len(fs)}
         else:
             coverage[wc] = {"description": desc, "status": "pass"}
     return coverage
@@ -1147,6 +1367,7 @@ def wcag_coverage(results):
 # ---------------------------------------------------------------------------
 # Component health: divitis, anti-patterns, extraction candidates
 # ---------------------------------------------------------------------------
+
 
 def _strip_attrs(tag):
     """Return tag-name plus canonical class attribute for fingerprinting."""
@@ -1171,60 +1392,70 @@ def check_components(html, source):
     total_divs = len(re.findall(r"<div\b", html, re.IGNORECASE))
     total_semantic = sum(
         len(re.findall(rf"<{t}\b", html, re.IGNORECASE))
-        for t in (LANDMARKS + SECTIONING + ["button", "a", "li", "ul", "ol",
-                                             "table", "form", "label"])
+        for t in (
+            LANDMARKS + SECTIONING + ["button", "a", "li", "ul", "ol", "table", "form", "label"]
+        )
     )
     div_ratio = total_divs / (total_divs + total_semantic) if (total_divs + total_semantic) else 0
     if worst_chain >= 5:
-        findings.append({
-            "issue": f"deep div nesting — {worst_chain}-level consecutive <div> chain",
-            "severity": "medium",
-            "note": "Flatten with semantic elements (<section>, <article>, <header>) or extract to a component.",
-        })
+        findings.append(
+            {
+                "issue": f"deep div nesting — {worst_chain}-level consecutive <div> chain",
+                "severity": "medium",
+                "note": "Flatten with semantic elements (<section>, <article>, <header>) or extract to a component.",
+            }
+        )
     if total_divs >= 20 and div_ratio > 0.7:
-        findings.append({
-            "issue": f"div-heavy markup ({total_divs} divs vs {total_semantic} semantic tags)",
-            "severity": "medium",
-            "note": "Tag soup — reach for semantic HTML first, divs for pure layout only.",
-        })
+        findings.append(
+            {
+                "issue": f"div-heavy markup ({total_divs} divs vs {total_semantic} semantic tags)",
+                "severity": "medium",
+                "note": "Tag soup — reach for semantic HTML first, divs for pure layout only.",
+            }
+        )
 
     # <div role="button"> / clickable divs / non-semantic nav
-    role_button = len(re.findall(
-        r'<(?:div|span)\b[^>]*\brole\s*=\s*["\']button["\']', html, re.IGNORECASE
-    ))
-    onclick_div = len(re.findall(
-        r'<(?:div|span)\b[^>]*\bonclick\s*=', html, re.IGNORECASE
-    ))
-    onclick_jsx = len(re.findall(
-        r'<(?:div|span)\b[^>]*\bonClick\s*=\s*\{', html,
-    ))
+    role_button = len(
+        re.findall(r'<(?:div|span)\b[^>]*\brole\s*=\s*["\']button["\']', html, re.IGNORECASE)
+    )
+    onclick_div = len(re.findall(r"<(?:div|span)\b[^>]*\bonclick\s*=", html, re.IGNORECASE))
+    onclick_jsx = len(
+        re.findall(
+            r"<(?:div|span)\b[^>]*\bonClick\s*=\s*\{",
+            html,
+        )
+    )
     clickable_non_button = role_button + onclick_div + onclick_jsx
     if clickable_non_button:
-        findings.append({
-            "issue": f"{clickable_non_button} clickable <div>/<span> (role=button or onClick)",
-            "severity": "high",
-            "note": "Use <button type='button'> — free keyboard access, focus ring, aria semantics.",
-        })
+        findings.append(
+            {
+                "issue": f"{clickable_non_button} clickable <div>/<span> (role=button or onClick)",
+                "severity": "high",
+                "note": "Use <button type='button'> — free keyboard access, focus ring, aria semantics.",
+            }
+        )
 
     # <a> without href (common anti-pattern for fake buttons)
-    a_no_href = len(re.findall(
-        r'<a\b(?:(?!href=)[^>])*>', html, re.IGNORECASE
-    ))
+    a_no_href = len(re.findall(r"<a\b(?:(?!href=)[^>])*>", html, re.IGNORECASE))
     if a_no_href >= 3:
-        findings.append({
-            "issue": f"{a_no_href} <a> tags without href",
-            "severity": "medium",
-            "note": "Anchors without href aren't focusable. Use <button> for actions, <a href> for navigation.",
-        })
+        findings.append(
+            {
+                "issue": f"{a_no_href} <a> tags without href",
+                "severity": "medium",
+                "note": "Anchors without href aren't focusable. Use <button> for actions, <a href> for navigation.",
+            }
+        )
 
     # Inline style blobs
     inline_styles = re.findall(r'\bstyle\s*=\s*["\']([^"\']{20,})["\']', html)
     if len(inline_styles) >= 5:
-        findings.append({
-            "issue": f"{len(inline_styles)} inline style='' attributes (20+ chars each)",
-            "severity": "medium",
-            "note": "One-off inline styles dodge your design system. Move to classes or component styles.",
-        })
+        findings.append(
+            {
+                "issue": f"{len(inline_styles)} inline style='' attributes (20+ chars each)",
+                "severity": "medium",
+                "note": "One-off inline styles dodge your design system. Move to classes or component styles.",
+            }
+        )
 
     # Repeated structural patterns (extraction candidates)
     fingerprints = []
@@ -1234,18 +1465,18 @@ def check_components(html, source):
             fingerprints.append(fp)
     repeat_counter = Counter(fingerprints)
     extraction_candidates = [
-        {"fingerprint": fp, "occurrences": n}
-        for fp, n in repeat_counter.most_common(10)
-        if n >= 4
+        {"fingerprint": fp, "occurrences": n} for fp, n in repeat_counter.most_common(10) if n >= 4
     ]
     if extraction_candidates:
-        findings.append({
-            "issue": f"{len(extraction_candidates)} repeated element signatures "
-                     f"(top: {extraction_candidates[0]['occurrences']}x)",
-            "severity": "medium",
-            "note": "Same tag+classes repeated 4+ times — extract to a component. "
-                    "Reduces drift and makes design changes one-edit.",
-        })
+        findings.append(
+            {
+                "issue": f"{len(extraction_candidates)} repeated element signatures "
+                f"(top: {extraction_candidates[0]['occurrences']}x)",
+                "severity": "medium",
+                "note": "Same tag+classes repeated 4+ times — extract to a component. "
+                "Reduces drift and makes design changes one-edit.",
+            }
+        )
 
     # Oversize JSX/TSX components (only in --path mode)
     oversize_components = []
@@ -1253,8 +1484,10 @@ def check_components(html, source):
     path = source.get("source") if source.get("source_type") == "path" else None
     if path and os.path.isdir(path):
         for root, _, files in os.walk(path):
-            if any(skip in root for skip in
-                   ("/node_modules/", "/.git/", "/dist/", "/build/", "/.next/")):
+            if any(
+                skip in root
+                for skip in ("/node_modules/", "/.git/", "/dist/", "/build/", "/.next/")
+            ):
                 continue
             for f in files:
                 if not f.endswith((".jsx", ".tsx", ".vue", ".svelte")):
@@ -1267,10 +1500,12 @@ def check_components(html, source):
                     continue
                 lines = content.count("\n") + 1
                 if lines > 300:
-                    oversize_components.append({
-                        "file": os.path.relpath(fp, path),
-                        "lines": lines,
-                    })
+                    oversize_components.append(
+                        {
+                            "file": os.path.relpath(fp, path),
+                            "lines": lines,
+                        }
+                    )
                 # Heavy props: a function/arrow component destructuring 10+ props
                 for m in re.finditer(
                     r"(?:function|const)\s+\w+\s*=?\s*(?:\([^)]*\)\s*=>\s*)?"
@@ -1279,25 +1514,31 @@ def check_components(html, source):
                 ):
                     props = [p.strip() for p in m.group(1).split(",") if p.strip()]
                     if len(props) >= 10:
-                        heavy_prop_components.append({
-                            "file": os.path.relpath(fp, path),
-                            "prop_count": len(props),
-                        })
+                        heavy_prop_components.append(
+                            {
+                                "file": os.path.relpath(fp, path),
+                                "prop_count": len(props),
+                            }
+                        )
                         break
 
     oversize_components.sort(key=lambda x: -x["lines"])
     if oversize_components:
-        findings.append({
-            "issue": f"{len(oversize_components)} component file(s) over 300 lines",
-            "severity": "medium",
-            "note": "Oversize components usually do several jobs. Split by concern (container/presenter, or by sub-feature).",
-        })
+        findings.append(
+            {
+                "issue": f"{len(oversize_components)} component file(s) over 300 lines",
+                "severity": "medium",
+                "note": "Oversize components usually do several jobs. Split by concern (container/presenter, or by sub-feature).",
+            }
+        )
     if heavy_prop_components:
-        findings.append({
-            "issue": f"{len(heavy_prop_components)} component(s) taking 10+ props",
-            "severity": "polish",
-            "note": "10+ props often means two components fused. Consider composition (children/slots) or a config object.",
-        })
+        findings.append(
+            {
+                "issue": f"{len(heavy_prop_components)} component(s) taking 10+ props",
+                "severity": "polish",
+                "note": "10+ props often means two components fused. Consider composition (children/slots) or a config object.",
+            }
+        )
 
     return {
         "findings": findings,
@@ -1316,6 +1557,7 @@ def check_components(html, source):
 # ---------------------------------------------------------------------------
 # W3C validation (the shock section)
 # ---------------------------------------------------------------------------
+
 
 def w3c_html_validate(source, html_text=None, url=None, timeout=20):
     """Call Nu Html Checker. Returns summary dict or {'error': ...}."""
@@ -1357,22 +1599,25 @@ def w3c_css_validate(url=None, css_text=None, timeout=20):
     """Call Jigsaw CSS validator. SOAP output has a clean counts tag."""
     try:
         if url:
-            u = ("https://jigsaw.w3.org/css-validator/validator?"
-                 f"uri={urllib.parse.quote(url, safe='')}&profile=css3svg"
-                 "&output=soap12&warning=1")
+            u = (
+                "https://jigsaw.w3.org/css-validator/validator?"
+                f"uri={urllib.parse.quote(url, safe='')}&profile=css3svg"
+                "&output=soap12&warning=1"
+            )
         else:
             # POST form with CSS text
-            form = urllib.parse.urlencode({
-                "text": css_text or "",
-                "profile": "css3svg",
-                "output": "soap12",
-                "warning": "1",
-            }).encode("utf-8")
+            form = urllib.parse.urlencode(
+                {
+                    "text": css_text or "",
+                    "profile": "css3svg",
+                    "output": "soap12",
+                    "warning": "1",
+                }
+            ).encode("utf-8")
             req = urllib.request.Request(
                 "https://jigsaw.w3.org/css-validator/validator",
                 data=form,
-                headers={"User-Agent": UA,
-                         "Content-Type": "application/x-www-form-urlencoded"},
+                headers={"User-Agent": UA, "Content-Type": "application/x-www-form-urlencoded"},
                 method="POST",
             )
             with urllib.request.urlopen(req, timeout=timeout) as r:
@@ -1390,11 +1635,11 @@ def _parse_css_soap(body):
     errs = re.search(r"<m:errorcount>(\d+)</m:errorcount>", body)
     warns = re.search(r"<m:warningcount>(\d+)</m:warningcount>", body)
     messages = re.findall(
-        r"<m:message>(.*?)</m:message>", body, re.DOTALL,
+        r"<m:message>(.*?)</m:message>",
+        body,
+        re.DOTALL,
     )
-    top = Counter(
-        re.sub(r"\s+", " ", m).strip()[:140] for m in messages
-    ).most_common(5)
+    top = Counter(re.sub(r"\s+", " ", m).strip()[:140] for m in messages).most_common(5)
     return {
         "endpoint": "jigsaw.w3.org",
         "errors": int(errs.group(1)) if errs else 0,
@@ -1406,6 +1651,7 @@ def _parse_css_soap(body):
 # ---------------------------------------------------------------------------
 # Scoring
 # ---------------------------------------------------------------------------
+
 
 def score(results):
     """0–100. Deductions weighted toward colorblind-critical issues."""
@@ -1422,29 +1668,44 @@ def score(results):
         s -= 3
     if not results["spacing"]["scale_ok"]:
         s -= 5
-    s -= min(20, sum(
-        {"high": 6, "medium": 3, "polish": 2, "info": 0}[f.get("severity", "polish")]
-        for f in results["ai_slop"]
-    ))
-    s -= min(15, sum(
-        {"high": 5, "medium": 3, "info": 0}[i.get("severity", "info")]
-        for i in results["hygiene"]
-    ))
-    s -= min(20, sum(
-        {"high": 5, "medium": 3, "info": 0}[f.get("severity", "info")]
-        for f in results["semantics"]["findings"]
-    ))
+    s -= min(
+        20,
+        sum(
+            {"high": 6, "medium": 3, "polish": 2, "info": 0}[f.get("severity", "polish")]
+            for f in results["ai_slop"]
+        ),
+    )
+    s -= min(
+        15,
+        sum(
+            {"high": 5, "medium": 3, "info": 0}[i.get("severity", "info")]
+            for i in results["hygiene"]
+        ),
+    )
+    s -= min(
+        20,
+        sum(
+            {"high": 5, "medium": 3, "info": 0}[f.get("severity", "info")]
+            for f in results["semantics"]["findings"]
+        ),
+    )
     tw = results["tailwind"]
     if tw.get("detected") and tw.get("clusters_over_12", 0) >= 3:
         s -= min(8, tw["clusters_over_12"])
-    s -= min(15, sum(
-        {"high": 5, "medium": 3, "polish": 1, "info": 0}[f.get("severity", "info")]
-        for f in results["components"]["findings"]
-    ))
-    s -= min(15, sum(
-        {"high": 5, "medium": 3, "info": 0}[f.get("severity", "info")]
-        for f in results["wcag_extras"]
-    ))
+    s -= min(
+        15,
+        sum(
+            {"high": 5, "medium": 3, "polish": 1, "info": 0}[f.get("severity", "info")]
+            for f in results["components"]["findings"]
+        ),
+    )
+    s -= min(
+        15,
+        sum(
+            {"high": 5, "medium": 3, "info": 0}[f.get("severity", "info")]
+            for f in results["wcag_extras"]
+        ),
+    )
     return max(0, s)
 
 
@@ -1452,13 +1713,15 @@ def score(results):
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main():
     ap = argparse.ArgumentParser()
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--path", help="Local directory to audit")
     g.add_argument("--url", help="URL to audit")
-    ap.add_argument("--no-validate", action="store_true",
-                    help="Skip W3C validator calls (offline mode)")
+    ap.add_argument(
+        "--no-validate", action="store_true", help="Skip W3C validator calls (offline mode)"
+    )
     args = ap.parse_args()
 
     if args.url:
@@ -1500,8 +1763,12 @@ def main():
             }
         else:
             results["validation"] = {
-                "html": w3c_html_validate(src, html_text=html) if html.strip() else {"skipped": "no HTML content"},
-                "css": w3c_css_validate(css_text=css) if css.strip() else {"skipped": "no CSS content"},
+                "html": w3c_html_validate(src, html_text=html)
+                if html.strip()
+                else {"skipped": "no HTML content"},
+                "css": w3c_css_validate(css_text=css)
+                if css.strip()
+                else {"skipped": "no CSS content"},
             }
     else:
         results["validation"] = {"skipped": "disabled via --no-validate"}

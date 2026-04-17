@@ -6,8 +6,10 @@ and miscellaneous settings that matter for per-turn cost.
 
 Usage:  scan_configs.py
 """
-import os, re, sys, json, glob, time
 
+import json
+import os
+import re
 
 HOME = os.path.expanduser("~")
 CWD = os.getcwd()
@@ -26,44 +28,120 @@ CWD = os.getcwd()
 # Match patterns are deliberately loose — a single hit flags the
 # server as a CLI-alternative candidate.
 CLI_ALTERNATIVES = [
-    {"name": ["github"], "pkg": ["server-github", "github-mcp"],
-     "cli": "gh", "reason": "GitHub MCP ships ~40+ tools. `gh` covers almost all of it (issues, PRs, workflows, releases, repos) at zero context cost when idle."},
-    {"name": ["gitlab"], "pkg": ["server-gitlab", "gitlab-mcp"],
-     "cli": "glab", "reason": "GitLab MCP is similarly heavy; `glab` is the official CLI."},
-    {"name": ["aws"], "pkg": ["aws-mcp", "server-aws"],
-     "cli": "aws", "reason": "AWS MCP wraps the SDK; the `aws` CLI has the same surface area with no per-turn cost."},
-    {"name": ["gcp", "google-cloud", "googlecloud"], "pkg": ["gcp-mcp", "server-gcp"],
-     "cli": "gcloud", "reason": "`gcloud` covers GCP resource management at zero idle cost."},
-    {"name": ["kubernetes", "k8s", "kubectl"], "pkg": ["kubernetes-mcp", "k8s-mcp"],
-     "cli": "kubectl", "reason": "`kubectl` is the canonical K8s CLI; the MCP adds latency and context for no functional gain."},
-    {"name": ["docker"], "pkg": ["docker-mcp", "server-docker"],
-     "cli": "docker", "reason": "`docker` CLI covers images, containers, compose — MCP is pure overhead."},
-    {"name": ["terraform"], "pkg": ["terraform-mcp"],
-     "cli": "terraform", "reason": "Terraform CLI is the standard interface; MCP wrappers duplicate it."},
-    {"name": ["stripe"], "pkg": ["stripe-mcp"],
-     "cli": "stripe", "reason": "Stripe CLI is lightweight and offers the same functionality."},
-    {"name": ["sentry"], "pkg": ["sentry-mcp"],
-     "cli": "sentry-cli", "reason": "`sentry-cli` covers release + event management."},
-    {"name": ["postgres", "postgresql"], "pkg": ["postgres-mcp", "server-postgres"],
-     "cli": "psql", "reason": "`psql` is the canonical Postgres CLI; MCP wrappers rarely add value."},
-    {"name": ["jira", "atlassian"], "pkg": ["jira-mcp", "atlassian-mcp"],
-     "cli": "acli", "reason": "Atlassian's `acli` (or jira-cli) is the usual replacement."},
-    {"name": ["trello"], "pkg": ["trello-mcp"],
-     "cli": "trello", "reason": "`trello` CLI (mheap/trello-cli) covers board / list / card ops."},
-    {"name": ["linear"], "pkg": ["linear-mcp"],
-     "cli": "linear", "reason": "Linear CLI + API work well; MCP adds per-turn schema load."},
-    {"name": ["playwright"], "pkg": ["playwright-mcp"],
-     "cli": "playwright", "reason": "Playwright CLI (via `npx playwright`) drives the same browser automation."},
-    {"name": ["puppeteer"], "pkg": ["puppeteer-mcp"],
-     "cli": "puppeteer (node script)", "reason": "Direct puppeteer usage from a node script keeps context clean."},
-    {"name": ["brave-search", "bravesearch"], "pkg": ["brave-search"],
-     "cli": "WebSearch tool", "reason": "Claude Code's built-in WebSearch tool already covers general search."},
-    {"name": ["fetch", "server-fetch"], "pkg": ["server-fetch"],
-     "cli": "WebFetch tool", "reason": "Claude Code's built-in WebFetch tool already covers URL retrieval."},
-    {"name": ["filesystem"], "pkg": ["server-filesystem"],
-     "cli": "native Read/Write/Bash", "reason": "Claude Code's built-in file tools are strictly cheaper."},
-    {"name": ["memory"], "pkg": ["server-memory"],
-     "cli": "auto-memory / CLAUDE.md", "reason": "Claude Code's auto-memory system covers the same ground without per-turn cost."},
+    {
+        "name": ["github"],
+        "pkg": ["server-github", "github-mcp"],
+        "cli": "gh",
+        "reason": "GitHub MCP ships ~40+ tools. `gh` covers almost all of it (issues, PRs, workflows, releases, repos) at zero context cost when idle.",
+    },
+    {
+        "name": ["gitlab"],
+        "pkg": ["server-gitlab", "gitlab-mcp"],
+        "cli": "glab",
+        "reason": "GitLab MCP is similarly heavy; `glab` is the official CLI.",
+    },
+    {
+        "name": ["aws"],
+        "pkg": ["aws-mcp", "server-aws"],
+        "cli": "aws",
+        "reason": "AWS MCP wraps the SDK; the `aws` CLI has the same surface area with no per-turn cost.",
+    },
+    {
+        "name": ["gcp", "google-cloud", "googlecloud"],
+        "pkg": ["gcp-mcp", "server-gcp"],
+        "cli": "gcloud",
+        "reason": "`gcloud` covers GCP resource management at zero idle cost.",
+    },
+    {
+        "name": ["kubernetes", "k8s", "kubectl"],
+        "pkg": ["kubernetes-mcp", "k8s-mcp"],
+        "cli": "kubectl",
+        "reason": "`kubectl` is the canonical K8s CLI; the MCP adds latency and context for no functional gain.",
+    },
+    {
+        "name": ["docker"],
+        "pkg": ["docker-mcp", "server-docker"],
+        "cli": "docker",
+        "reason": "`docker` CLI covers images, containers, compose — MCP is pure overhead.",
+    },
+    {
+        "name": ["terraform"],
+        "pkg": ["terraform-mcp"],
+        "cli": "terraform",
+        "reason": "Terraform CLI is the standard interface; MCP wrappers duplicate it.",
+    },
+    {
+        "name": ["stripe"],
+        "pkg": ["stripe-mcp"],
+        "cli": "stripe",
+        "reason": "Stripe CLI is lightweight and offers the same functionality.",
+    },
+    {
+        "name": ["sentry"],
+        "pkg": ["sentry-mcp"],
+        "cli": "sentry-cli",
+        "reason": "`sentry-cli` covers release + event management.",
+    },
+    {
+        "name": ["postgres", "postgresql"],
+        "pkg": ["postgres-mcp", "server-postgres"],
+        "cli": "psql",
+        "reason": "`psql` is the canonical Postgres CLI; MCP wrappers rarely add value.",
+    },
+    {
+        "name": ["jira", "atlassian"],
+        "pkg": ["jira-mcp", "atlassian-mcp"],
+        "cli": "acli",
+        "reason": "Atlassian's `acli` (or jira-cli) is the usual replacement.",
+    },
+    {
+        "name": ["trello"],
+        "pkg": ["trello-mcp"],
+        "cli": "trello",
+        "reason": "`trello` CLI (mheap/trello-cli) covers board / list / card ops.",
+    },
+    {
+        "name": ["linear"],
+        "pkg": ["linear-mcp"],
+        "cli": "linear",
+        "reason": "Linear CLI + API work well; MCP adds per-turn schema load.",
+    },
+    {
+        "name": ["playwright"],
+        "pkg": ["playwright-mcp"],
+        "cli": "playwright",
+        "reason": "Playwright CLI (via `npx playwright`) drives the same browser automation.",
+    },
+    {
+        "name": ["puppeteer"],
+        "pkg": ["puppeteer-mcp"],
+        "cli": "puppeteer (node script)",
+        "reason": "Direct puppeteer usage from a node script keeps context clean.",
+    },
+    {
+        "name": ["brave-search", "bravesearch"],
+        "pkg": ["brave-search"],
+        "cli": "WebSearch tool",
+        "reason": "Claude Code's built-in WebSearch tool already covers general search.",
+    },
+    {
+        "name": ["fetch", "server-fetch"],
+        "pkg": ["server-fetch"],
+        "cli": "WebFetch tool",
+        "reason": "Claude Code's built-in WebFetch tool already covers URL retrieval.",
+    },
+    {
+        "name": ["filesystem"],
+        "pkg": ["server-filesystem"],
+        "cli": "native Read/Write/Bash",
+        "reason": "Claude Code's built-in file tools are strictly cheaper.",
+    },
+    {
+        "name": ["memory"],
+        "pkg": ["server-memory"],
+        "cli": "auto-memory / CLAUDE.md",
+        "reason": "Claude Code's auto-memory system covers the same ground without per-turn cost.",
+    },
 ]
 
 
@@ -108,7 +186,7 @@ def body_lines(path):
         parts = text.split("---", 2)
         if len(parts) >= 3:
             text = parts[2]
-    return len([l for l in text.splitlines() if l.strip() or True])
+    return len([line for line in text.splitlines() if line.strip() or True])
 
 
 def inventory_markdown_dir(base, scope):
@@ -122,18 +200,26 @@ def inventory_markdown_dir(base, scope):
             for cand in ("SKILL.md", "AGENT.md", "COMMAND.md", f"{name}.md"):
                 p = os.path.join(full, cand)
                 if os.path.isfile(p):
-                    out.append({
-                        "name": name, "scope": scope, "path": p,
-                        "body_lines": body_lines(p),
-                        "mtime": int(os.path.getmtime(p)),
-                    })
+                    out.append(
+                        {
+                            "name": name,
+                            "scope": scope,
+                            "path": p,
+                            "body_lines": body_lines(p),
+                            "mtime": int(os.path.getmtime(p)),
+                        }
+                    )
                     break
         elif full.endswith(".md"):
-            out.append({
-                "name": os.path.splitext(name)[0], "scope": scope, "path": full,
-                "body_lines": body_lines(full),
-                "mtime": int(os.path.getmtime(full)),
-            })
+            out.append(
+                {
+                    "name": os.path.splitext(name)[0],
+                    "scope": scope,
+                    "path": full,
+                    "body_lines": body_lines(full),
+                    "mtime": int(os.path.getmtime(full)),
+                }
+            )
     return out
 
 
@@ -145,11 +231,13 @@ def follow_imports(path, seen=None):
     if not path or path in seen or not os.path.isfile(path):
         return results
     seen.add(path)
-    results.append({
-        "path": path,
-        "lines": count_lines(path),
-        "mtime": int(os.path.getmtime(path)),
-    })
+    results.append(
+        {
+            "path": path,
+            "lines": count_lines(path),
+            "mtime": int(os.path.getmtime(path)),
+        }
+    )
     base = os.path.dirname(path)
     try:
         with open(path) as f:
@@ -173,9 +261,23 @@ def ghost_refs_in_claude_md(files, known_slash_names):
         text = read_text(entry["path"])
         for m in pattern.finditer(text):
             name = m.group(1)
-            if name.lower() in {"help", "clear", "context", "mcp", "memory",
-                                "skills", "exit", "compact", "login", "logout",
-                                "model", "cost", "config", "init", "bug"}:
+            if name.lower() in {
+                "help",
+                "clear",
+                "context",
+                "mcp",
+                "memory",
+                "skills",
+                "exit",
+                "compact",
+                "login",
+                "logout",
+                "model",
+                "cost",
+                "config",
+                "init",
+                "bug",
+            }:
                 continue
             if name not in known_slash_names:
                 ghosts.append({"file": entry["path"], "ref": f"/{name}"})
@@ -195,8 +297,8 @@ def managed_settings_paths():
     / MDM settings that take highest precedence and cannot be overridden."""
     return [
         "/Library/Application Support/ClaudeCode/managed-settings.json",  # macOS
-        "/etc/claude-code/managed-settings.json",                          # Linux/WSL
-        r"C:\Program Files\ClaudeCode\managed-settings.json",              # Windows
+        "/etc/claude-code/managed-settings.json",  # Linux/WSL
+        r"C:\Program Files\ClaudeCode\managed-settings.json",  # Windows
     ]
 
 
@@ -305,11 +407,13 @@ def main():
             scfg.get("args") or [],
         )
         for m in matches:
-            cli_candidates.append({
-                "server": sname,
-                "suggested_cli": m["cli"],
-                "reason": m["reason"],
-            })
+            cli_candidates.append(
+                {
+                    "server": sname,
+                    "suggested_cli": m["cli"],
+                    "reason": m["reason"],
+                }
+            )
     out["cli_alternative_candidates"] = cli_candidates
 
     # Permissions (concatenate allow/deny across all scopes)
@@ -321,22 +425,19 @@ def main():
     out["permissions"] = {"allow": allow, "deny": deny}
 
     # Skills (user + project)
-    out["skills"] = (
-        inventory_markdown_dir(os.path.join(HOME, ".claude/skills"), "user")
-        + inventory_markdown_dir(os.path.join(CWD, ".claude/skills"), "project")
-    )
+    out["skills"] = inventory_markdown_dir(
+        os.path.join(HOME, ".claude/skills"), "user"
+    ) + inventory_markdown_dir(os.path.join(CWD, ".claude/skills"), "project")
 
     # Agents (user + project)
-    out["agents"] = (
-        inventory_markdown_dir(os.path.join(HOME, ".claude/agents"), "user")
-        + inventory_markdown_dir(os.path.join(CWD, ".claude/agents"), "project")
-    )
+    out["agents"] = inventory_markdown_dir(
+        os.path.join(HOME, ".claude/agents"), "user"
+    ) + inventory_markdown_dir(os.path.join(CWD, ".claude/agents"), "project")
 
     # Slash commands (user + project)
-    out["commands"] = (
-        inventory_markdown_dir(os.path.join(HOME, ".claude/commands"), "user")
-        + inventory_markdown_dir(os.path.join(CWD, ".claude/commands"), "project")
-    )
+    out["commands"] = inventory_markdown_dir(
+        os.path.join(HOME, ".claude/commands"), "user"
+    ) + inventory_markdown_dir(os.path.join(CWD, ".claude/commands"), "project")
 
     # CLAUDE.md files + imports
     claude_md_paths = []

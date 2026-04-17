@@ -7,7 +7,12 @@ Usage:  scan_jsonl.py [days=30]
 Streams ~/.claude/projects/<slug>/*.jsonl for the current working directory's
 slug. Never loads whole files into memory; emits JSON aggregates only.
 """
-import sys, os, json, glob, time
+
+import glob
+import json
+import os
+import sys
+import time
 
 
 def percentile(sorted_vals, p):
@@ -29,8 +34,7 @@ def main():
         return
 
     cutoff = time.time() - days * 86400
-    files = [f for f in glob.glob(os.path.join(root, "*.jsonl"))
-             if os.path.getmtime(f) >= cutoff]
+    files = [f for f in glob.glob(os.path.join(root, "*.jsonl")) if os.path.getmtime(f) >= cutoff]
 
     tool_counts, skill_counts = {}, {}
     tool_errors = {}
@@ -131,9 +135,11 @@ def main():
 
     total_input = cache_read + cache_create + input_tok
     cache_hit = (cache_read / total_input) if total_input else 0.0
-    corrections = sum(1 for t in user_turns_text
-                      if t.lstrip().startswith(("no ", "no,", "don't", "stop ",
-                                                "wrong", "that's wrong", "not ")))
+    corrections = sum(
+        1
+        for t in user_turns_text
+        if t.lstrip().startswith(("no ", "no,", "don't", "stop ", "wrong", "that's wrong", "not "))
+    )
     avg_turn = (cache_read + cache_create + input_tok) / turns if turns else 0
 
     per_turn_input.sort()
@@ -150,33 +156,42 @@ def main():
                 "rate": round(errs / count, 3),
             }
 
-    print(json.dumps({
-        "window_days": days,
-        "files_scanned": len(files),
-        "sessions": len(sessions),
-        "assistant_turns": turns,
-        "cache_hit_rate": round(cache_hit, 3),
-        "avg_input_per_turn": int(avg_turn),
-        "p50_input_per_turn": percentile(per_turn_input, 50),
-        "p95_input_per_turn": percentile(per_turn_input, 95),
-        "p99_input_per_turn": percentile(per_turn_input, 99),
-        "tokens": {"cache_read": cache_read, "cache_create": cache_create,
-                   "input": input_tok, "output": output_tok},
-        "autocompact_events": autocompact,
-        "sessions_hit_autocompact": len(sessions_hit_limit),
-        "tool_top": sorted(tool_counts.items(), key=lambda x: -x[1])[:30],
-        "tool_total_distinct": len(tool_counts),
-        "tool_error_rates": dict(sorted(tool_error_rates.items(),
-                                        key=lambda x: -x[1]["rate"])),
-        "skill_top": sorted(skill_counts.items(), key=lambda x: -x[1])[:30],
-        "agent_subagent_types": dict(sorted(agent_types.items(),
-                                            key=lambda x: -x[1])),
-        "bash_commands_sample": bash_commands[:500],
-        "read_paths_top": sorted(read_paths.items(), key=lambda x: -x[1])[:20],
-        "large_tool_results_top": [{"tool": t, "bytes": b} for t, b in large_results[:10]],
-        "correction_user_turns": corrections,
-        "user_turns_sampled": len(user_turns_text),
-    }, indent=2))
+    print(
+        json.dumps(
+            {
+                "window_days": days,
+                "files_scanned": len(files),
+                "sessions": len(sessions),
+                "assistant_turns": turns,
+                "cache_hit_rate": round(cache_hit, 3),
+                "avg_input_per_turn": int(avg_turn),
+                "p50_input_per_turn": percentile(per_turn_input, 50),
+                "p95_input_per_turn": percentile(per_turn_input, 95),
+                "p99_input_per_turn": percentile(per_turn_input, 99),
+                "tokens": {
+                    "cache_read": cache_read,
+                    "cache_create": cache_create,
+                    "input": input_tok,
+                    "output": output_tok,
+                },
+                "autocompact_events": autocompact,
+                "sessions_hit_autocompact": len(sessions_hit_limit),
+                "tool_top": sorted(tool_counts.items(), key=lambda x: -x[1])[:30],
+                "tool_total_distinct": len(tool_counts),
+                "tool_error_rates": dict(
+                    sorted(tool_error_rates.items(), key=lambda x: -x[1]["rate"])
+                ),
+                "skill_top": sorted(skill_counts.items(), key=lambda x: -x[1])[:30],
+                "agent_subagent_types": dict(sorted(agent_types.items(), key=lambda x: -x[1])),
+                "bash_commands_sample": bash_commands[:500],
+                "read_paths_top": sorted(read_paths.items(), key=lambda x: -x[1])[:20],
+                "large_tool_results_top": [{"tool": t, "bytes": b} for t, b in large_results[:10]],
+                "correction_user_turns": corrections,
+                "user_turns_sampled": len(user_turns_text),
+            },
+            indent=2,
+        )
+    )
 
 
 if __name__ == "__main__":

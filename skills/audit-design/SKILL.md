@@ -1,11 +1,12 @@
 ---
 name: audit-design
 description: >
-  Static design + WCAG accessibility audit for web UIs. Accepts a URL
-  or local directory. Scores contrast, colour signalling, alt text,
-  semantic structure, keyboard access, and other WCAG criteria, plus
-  design hygiene (fonts, spacing, AI-slop patterns, component health).
-  Returns a 0–100 score with specific findings — no live browser needed.
+  Design and WCAG accessibility audit for web UIs. Accepts a URL or
+  local directory. Uses a live browser for URLs — handles SPAs and
+  dynamically-rendered content. Scores contrast, colour signalling,
+  alt text, semantic structure, keyboard access, and other WCAG
+  criteria, plus design hygiene (fonts, spacing, AI-slop patterns,
+  component health). Returns a 0–100 score with actionable findings.
   Use when the user says "audit the design", "WCAG audit",
   "accessibility check", or "design review".
 user-invocable: true
@@ -13,18 +14,11 @@ user-invocable: true
 
 # Design Audit
 
-Static design + WCAG accessibility audit aimed at developers who can't
-eyeball visual problems (colorblindness, limited design experience, or
-just not designers). Every check is computable — contrast ratios,
-structural parse, regex pattern match — so the output is deterministic
-and reproducible. Every accessibility finding is mapped to the relevant
-WCAG 2.1 success criterion.
-
-This is a **static scan + score**. It does not render the page in a
-browser, does not fix code, and does not generate mockups. When a
-check requires a live browser (computed styles, runtime CSS variables,
-dynamically-injected markup), the report says so explicitly rather
-than emitting a falsely-confident number.
+Design and WCAG accessibility audit for web UIs. Every accessibility
+finding is mapped to the relevant WCAG 2.1 success criterion. For
+URLs, a live browser renders the page first — SPAs and
+dynamically-injected content are handled correctly. Does not fix code
+or generate mockups.
 
 ## Step 1: Scope the input
 
@@ -32,40 +26,67 @@ Ask the user for one of:
 
 - **URL** — a deployed site you can reach over HTTPS
 - **path** — a local directory of HTML/CSS/JSX/TSX/Vue/Svelte source
-- **both** — the "plan vs implementation" case; audit the design
-  mockup / source directory AND the live deploy, then surface the
-  divergences
+- **both** — the "plan vs implementation" case; audit the source
+  directory AND the live deploy, then surface the divergences
 
-Key questions to confirm before running:
+## Step 2: Run the audit
 
-1. URL or path?
-2. If URL: is it a client-rendered SPA (React/Vue/Next.js/Svelte)?
-   Static fetch of an SPA returns an empty HTML shell and produces
-   a useless audit. If yes, switch to `--path` on the source
-   directory, or tell the user the URL mode won't work for a
-   client-rendered app and they'll need a live-browser tool.
-3. Is internet available? The W3C validator section needs it. If
-   not, pass `--no-validate` and note that the "shock" section is
-   skipped.
+### URL mode — browser-first
 
-## Step 2: Run the scanner
+Use the chrome browser tools to render the page fully before scanning.
+
+1. Create a new tab and navigate to the URL:
+
+```
+tabs_create_mcp → navigate(url=<url>)
+```
+
+2. Take a screenshot and show it to the user:
+
+```
+mcp__claude-in-chrome__computer { action: "screenshot" }
+```
+Then Read the screenshot file so it appears in the conversation.
+
+3. Extract the rendered HTML and all CSS into a temp directory:
+
+```javascript
+// Get fully-rendered HTML (post JS execution)
+document.documentElement.outerHTML
+
+// Get all CSS rules from every loaded stylesheet
+Array.from(document.styleSheets).map(sheet => {
+  try { return Array.from(sheet.cssRules).map(r => r.cssText).join('\n') }
+  catch(e) { return '' }
+}).join('\n\n')
+```
+
+Save the HTML as `/tmp/audit_design/index.html` and the CSS as
+`/tmp/audit_design/styles.css` (use a timestamp suffix if needed to
+avoid collisions).
+
+4. Check for JS errors on the page:
+
+```
+read_console_messages(onlyErrors=true)
+```
+
+Report any errors as additional findings at the end of the audit.
+
+5. Run the scanner against the temp directory:
 
 ```bash
-python3 "$SKILL_DIR/scripts/scan_design.py" --url <url>
-# or
+python3 "$SKILL_DIR/scripts/scan_design.py" --path /tmp/audit_design --no-validate
+```
+
+### Path mode — static scan
+
+```bash
 python3 "$SKILL_DIR/scripts/scan_design.py" --path <dir>
 # add --no-validate to skip W3C calls (offline, or the API is flaky)
 ```
 
-Substitute the skill's absolute base directory for `$SKILL_DIR`. The
-output is one JSON object. The sections below tell you how to
-interpret each field and what fix to recommend.
-
-If `source.spa_warning` is `true`, **stop and warn the user**. The
-audit will undercount everything because the fetched HTML is just a
-loader shell. Recommend `--path` on the built / source directory
-instead, or warn that URL mode won't produce a useful report for a
-client-rendered app.
+No browser needed for local files.
 
 ## Step 3: Read the report, section by section
 
@@ -338,15 +359,15 @@ Say these up front if asked how confident the audit is:
 
 - **Regex-based CSS parsing** misses: CSS variables resolved at
   runtime, inherited contrast pairs, computed dark-mode colors,
-  media-query nesting effects, preprocessor output (SCSS/LESS
-  source pre-compilation).
-- **Static HTML fetch** misses: anything a client-side framework
-  injects, dynamic class lists, portal/modal markup.
+  media-query nesting effects.
+- **CSS extraction via `document.styleSheets`** may miss cross-origin
+  stylesheets blocked by CORS. If `cssRules` throws, that stylesheet
+  is skipped silently.
 - **W3C validators** flag things browsers don't enforce. Treat
-  repeated patterns as real, one-off errors as noise.
+  repeated patterns as real, one-off errors as noise. Skipped in URL
+  mode (we use `--no-validate` to avoid double-fetching).
 - Tailwind detection is a heuristic (>40% shaped tokens). False
-  positives on Bootstrap 5 or other utility frameworks are
-  possible.
+  positives on Bootstrap 5 or other utility frameworks are possible.
 
 When a category would be unreliable, say so in the report rather
 than emitting a falsely-confident number.

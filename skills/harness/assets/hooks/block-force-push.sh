@@ -72,6 +72,20 @@ while IFS= read -r seg; do
   if echo "$seg" | grep -Eq '^[[:space:]]*git[[:space:]]+push[[:space:]].*(--force|[[:space:]]-f[[:space:]])'; then
     block "$seg" "force-push without --force-with-lease"
   fi
+  # Refspec push-delete: `git push origin :main`, `git push origin :refs/heads/main`.
+  # The leading colon means "delete" — equivalent to a force-overwrite of nothing
+  # over the protected branch. Block protected names only, same list as branch -D.
+  if echo "$seg" | grep -Eq '^[[:space:]]*git[[:space:]]+push[[:space:]]+[^[:space:]]+[[:space:]]+:(refs/heads/)?(main|master|develop|trunk|production|prod|staging|release[/-])'; then
+    block "$seg" "refspec push-delete of protected branch (push origin :branch)"
+  fi
+  # Explicit `--delete` flag.
+  if echo "$seg" | grep -Eq '^[[:space:]]*git[[:space:]]+push[[:space:]].*--delete[[:space:]]+([^[:space:]]+[[:space:]]+)*(main|master|develop|trunk|production|prod|staging|release[/-])'; then
+    block "$seg" "git push --delete on protected branch"
+  fi
+  # `+` refspec prefix is force without `--force`. Block when target is protected.
+  if echo "$seg" | grep -Eq '^[[:space:]]*git[[:space:]]+push[[:space:]].*[[:space:]]\+[^[:space:]:]*:(refs/heads/)?(main|master|develop|trunk|production|prod|staging|release[/-])'; then
+    block "$seg" "force-push via +refspec to protected branch"
+  fi
   if echo "$seg" | grep -Eq '^[[:space:]]*git[[:space:]]+reset[[:space:]]+--hard[[:space:]]+(origin|upstream)/'; then
     block "$seg" "hard reset to remote"
   fi

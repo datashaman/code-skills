@@ -308,9 +308,12 @@ if scope == "user" and os.environ.get("REMOVE_ENV") == "1":
     if not env and "env" in s:
         del s["env"]
 
-with open(p, "w") as f:
+# Atomic write — see install.sh for rationale.
+tmp = p + ".tmp"
+with open(tmp, "w") as f:
     json.dump(s, f, indent=2)
     f.write("\n")
+os.replace(tmp, p)
 
 if removed:
     for r in removed:

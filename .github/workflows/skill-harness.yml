@@ -95,6 +95,34 @@ jobs:
           rc=$(echo '{"tool_name":"Bash","tool_input":{"command":"git branch -D main"}}' \
                | "$TMPHOME/.claude/hooks/block-force-push.sh" 2>/dev/null; echo $?)
           [ "$rc" = "2" ] || { echo "::error::branch -D main should be blocked"; exit 1; }
+          # Should block (refspec push-delete of protected branch):
+          rc=$(echo '{"tool_name":"Bash","tool_input":{"command":"git push origin :main"}}' \
+               | "$TMPHOME/.claude/hooks/block-force-push.sh" 2>/dev/null; echo $?)
+          [ "$rc" = "2" ] || { echo "::error::refspec push-delete of main should be blocked"; exit 1; }
+          rc=$(echo '{"tool_name":"Bash","tool_input":{"command":"git push origin :refs/heads/master"}}' \
+               | "$TMPHOME/.claude/hooks/block-force-push.sh" 2>/dev/null; echo $?)
+          [ "$rc" = "2" ] || { echo "::error::refspec push-delete refs/heads/master should be blocked"; exit 1; }
+          # Should allow (refspec push-delete of feature branch):
+          rc=$(echo '{"tool_name":"Bash","tool_input":{"command":"git push origin :feature/foo"}}' \
+               | "$TMPHOME/.claude/hooks/block-force-push.sh" 2>/dev/null; echo $?)
+          [ "$rc" = "0" ] || { echo "::error::refspec push-delete of feature branch incorrectly blocked"; exit 1; }
+          # Should block (--delete on protected branch):
+          rc=$(echo '{"tool_name":"Bash","tool_input":{"command":"git push --delete origin main"}}' \
+               | "$TMPHOME/.claude/hooks/block-force-push.sh" 2>/dev/null; echo $?)
+          [ "$rc" = "2" ] || { echo "::error::git push --delete origin main should be blocked"; exit 1; }
+          # Should block (+refspec to protected branch — force without --force):
+          rc=$(echo '{"tool_name":"Bash","tool_input":{"command":"git push origin +HEAD:main"}}' \
+               | "$TMPHOME/.claude/hooks/block-force-push.sh" 2>/dev/null; echo $?)
+          [ "$rc" = "2" ] || { echo "::error::+refspec push to main should be blocked"; exit 1; }
+
+      - name: settings.json write is atomic (no .tmp leftover)
+        run: |
+          HOME="$TMPHOME" USER_PROJECT_KEY="-ci-test" SKILL_DIR="$SK" \
+            bash "$SK/scripts/install.sh" --force > /dev/null
+          [ ! -e "$TMPHOME/.claude/settings.json.tmp" ] \
+            || { echo "::error::settings.json.tmp left behind — atomic rename failed"; exit 1; }
+          python3 -m json.tool < "$TMPHOME/.claude/settings.json" > /dev/null \
+            || { echo "::error::settings.json is not valid JSON after install"; exit 1; }
 
       - name: modify a hook → status reports 'modified'
         run: |

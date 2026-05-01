@@ -397,9 +397,14 @@ for event, matcher, cmd in OUR_HOOKS:
     if ensure_hook(event, matcher, cmd):
         changed = True
 
-with open(p, "w") as f:
+# Atomic write: tmp file in the same dir, then rename. Avoids leaving an
+# empty/partial settings.json if the process is interrupted mid-write —
+# Claude Code refuses to load invalid JSON.
+tmp = p + ".tmp"
+with open(tmp, "w") as f:
     json.dump(s, f, indent=2)
     f.write("\n")
+os.replace(tmp, p)
 print("  settings.json updated" if changed else "  settings.json already current")
 PY
   else

@@ -21,7 +21,8 @@ block() {
   exit 2
 }
 
-# Split into segments on ; && || | & and newlines. Crude but enough.
+# Split into segments on ; && || | and newlines. Lone & (background) is not
+# split — none of the patterns we block are about backgrounding.
 segments="$(CLAUDE_HOOK_CMD="$cmd" python3 - <<'PY'
 import os, re
 src = os.environ.get("CLAUDE_HOOK_CMD","")

@@ -66,8 +66,9 @@ done
 
 # 4. Secret scan.
 SECRET_PATTERNS='(sk-ant-|ghp_|gho_|ghu_|AIza[0-9A-Za-z_-]{35}|AKIA[0-9A-Z]{16}|xox[baprs]-[0-9A-Za-z-]{10,}|-----BEGIN [A-Z ]*PRIVATE KEY-----)'
-if grep -rEln "$SECRET_PATTERNS" . 2>/dev/null \
-    | grep -vE '^(\./)?(\.git/|scripts/snapshot\.sh)'; then
+if grep -rEln --exclude-dir=.git --exclude-dir=node_modules --exclude-dir=__pycache__ \
+    "$SECRET_PATTERNS" . 2>/dev/null \
+    | grep -vE '^(\./)?scripts/snapshot\.sh$'; then
   echo "abort: potential secret detected — review above and re-run after scrubbing" >&2
   exit 1
 fi

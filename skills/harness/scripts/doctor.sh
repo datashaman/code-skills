@@ -70,6 +70,15 @@ else
   bad "no sha256 tool (need sha256sum, shasum, or python3) — content-match checks won't work"
 fi
 
+# 1b. python3 (used by JSON parsing + hook-wiring check below).
+HAVE_PY=0
+if command -v python3 >/dev/null 2>&1; then
+  HAVE_PY=1
+  ok "python3 available"
+else
+  bad "no python3 — settings.json parsing + hook-wiring checks will be skipped"
+fi
+
 # 2. Target writable.
 if [ -w "$TARGET" ] || [ ! -e "$TARGET" ]; then
   ok "target dir is writable: $TARGET"
@@ -79,14 +88,14 @@ fi
 
 # 3. settings.json parseable.
 SETTINGS="$TARGET/settings.json"
-if [ -f "$SETTINGS" ]; then
-  if python3 -m json.tool < "$SETTINGS" >/dev/null 2>&1; then
-    ok "settings.json is valid JSON"
-  else
-    bad "settings.json is not valid JSON — Claude Code will refuse to load it"
-  fi
-else
+if [ ! -f "$SETTINGS" ]; then
   warn "no settings.json at $SETTINGS — install.sh will create one"
+elif [ $HAVE_PY -eq 0 ]; then
+  warn "settings.json present but python3 missing — skipping JSON validity check"
+elif python3 -m json.tool < "$SETTINGS" >/dev/null 2>&1; then
+  ok "settings.json is valid JSON"
+else
+  bad "settings.json is not valid JSON — Claude Code will refuse to load it"
 fi
 
 # 4. Hook scripts exist and are executable; foreign hooks pointing elsewhere flagged.
@@ -104,6 +113,9 @@ if [ -f "$SETTINGS" ]; then
   done
 
   # Check for hook entries in settings.json that point at *unexpected* paths.
+  if [ $HAVE_PY -eq 0 ]; then
+    warn "skipping settings.json hook-wiring check (python3 not available)"
+  else
   SETTINGS="$SETTINGS" python3 - <<'PY' || true
 import json, os, sys
 p = os.environ["SETTINGS"]
@@ -134,6 +146,7 @@ if missing:
 else:
     print(f"  [  OK  ]  all 4 hooks wired in settings.json")
 PY
+  fi
 fi
 
 # 5. Hook smoke-test: invoke block-force-push with a known-bad command.

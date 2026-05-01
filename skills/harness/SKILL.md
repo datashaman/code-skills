@@ -94,15 +94,8 @@ The script always prints a **preflight banner** showing scope, target, the per-s
 
 After install, walk the user through the hand-edits printed under "Next steps":
 
-1. Fill in `## Stack signals` in CLAUDE.md.
-2. (User scope only) Replace placeholders in `memory/user_role.md` with the user's actual role/projects/stack. **Ask, don't invent.**
-
-Tell them to **restart Claude Code** so hooks load.
-
-After install, walk the user through two hand-edits:
-
-1. `~/.claude/CLAUDE.md` — fill in the `## Stack signals` section. Look at `~/.claude/projects/` slugs and `installed_plugins.json` for hints; ask if unclear. **Don't auto-fill from guesswork.**
-2. `~/.claude/projects/<slug>/memory/user_role.md` — replace placeholders with the user's actual role/projects/stack. **Ask, don't invent.**
+1. Fill in `## Stack signals` in `CLAUDE.md` (user scope: `~/.claude/CLAUDE.md`; project scope: `<project>/CLAUDE.md`). At install time the script tries to auto-fill this from manifests it finds — verify it picked up your stack correctly. If you need hints, look at `~/.claude/projects/` slugs and `installed_plugins.json`; ask if unclear. **Don't auto-fill from guesswork.**
+2. (User scope only) Replace placeholders in `~/.claude/projects/<slug>/memory/user_role.md` with the user's actual role / projects / stack. **Ask, don't invent.**
 
 Tell them to **restart Claude Code** so hooks load.
 

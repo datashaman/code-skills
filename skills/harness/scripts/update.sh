@@ -116,9 +116,12 @@ update_one() {
   [ $DRY -eq 1 ] && return 0
 
   case "$action" in
-    "missing → install"|"modified → OVERWRITE (--force)"|"identical — no-op")
+    "missing → install"|"modified → OVERWRITE (--force)")
       mkdir -p "$(dirname "$installed")"
       cp "$template" "$installed"
+      ;;
+    "identical — no-op")
+      : # genuinely a no-op; don't touch the file's mtime.
       ;;
     "modified → write template to "*)
       cp "$template" "${installed}.new"

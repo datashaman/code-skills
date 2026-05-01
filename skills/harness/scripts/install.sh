@@ -247,7 +247,7 @@ fi
 # 2. CLAUDE.md — copy the template, then auto-fill the ## Stack signals
 # section if a stack manifest is detected at the project root.
 fill_stack_signals() {
-  local md="$1"        # path to the freshly installed CLAUDE.md
+  local md="$1"           # path to the freshly installed CLAUDE.md
   local detect_root="$2"  # dir to scan for manifests
   [ -f "$md" ] || return 0
   local detected
@@ -257,8 +257,9 @@ fill_stack_signals() {
   fi
   # Replace the placeholder block (the HTML comment "Replace with your default
   # stack..." + its example block) with the detected bullets. Use python for
-  # robust multi-line replacement.
-  CLAUDE_MD="$md" DETECTED="$detected" python3 - <<'PY'
+  # robust multi-line replacement. DETECT_ROOT is exported here so the log
+  # line is accurate regardless of caller convention.
+  CLAUDE_MD="$md" DETECTED="$detected" DETECT_ROOT="$detect_root" python3 - <<'PY'
 import os, re
 p = os.environ["CLAUDE_MD"]
 detected = os.environ["DETECTED"].rstrip()
@@ -273,7 +274,7 @@ pattern = re.compile(
 new = pattern.sub(detected + "\n", text, count=1)
 if new != text:
     open(p, "w").write(new)
-    print(f"  auto-filled Stack signals from manifests in {os.environ.get('DETECT_ROOT', '.')}")
+    print(f"  auto-filled Stack signals from manifests in {os.environ['DETECT_ROOT']}")
 PY
 }
 
@@ -285,7 +286,7 @@ elif [ "$SCOPE" = "user" ]; then
   # At user scope, scan the user's home for a top-level manifest. Usually
   # there isn't one — the section will stay as a placeholder for hand-edit.
   # But if the user keeps a default-project at $HOME, this picks it up.
-  [ $DRY -eq 0 ] && DETECT_ROOT="$HOME" fill_stack_signals "$TARGET/CLAUDE.md" "$HOME"
+  [ $DRY -eq 0 ] && fill_stack_signals "$TARGET/CLAUDE.md" "$HOME"
 else
   PROJECT_ROOT="$(dirname "$TARGET")"
   PROJECT_CLAUDE_MD="$PROJECT_ROOT/CLAUDE.md"
@@ -294,7 +295,7 @@ else
   else
     say "installing project CLAUDE.md"
     copy_safe "$ASSETS/CLAUDE.md.tmpl" "$PROJECT_CLAUDE_MD"
-    [ $DRY -eq 0 ] && DETECT_ROOT="$PROJECT_ROOT" fill_stack_signals "$PROJECT_CLAUDE_MD" "$PROJECT_ROOT"
+    [ $DRY -eq 0 ] && fill_stack_signals "$PROJECT_CLAUDE_MD" "$PROJECT_ROOT"
   fi
 fi
 

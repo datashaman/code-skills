@@ -154,15 +154,21 @@ echo "settings.json"
 SETTINGS="$TARGET/settings.json"
 if [ ! -f "$SETTINGS" ]; then
   printf '  %s no settings.json\n' "$(red 'missing     ')"
+elif ! command -v python3 >/dev/null 2>&1; then
+  printf '  %s python3 not on PATH — settings check skipped\n' "$(yellow 'unknown     ')"
 else
-  SETTINGS="$SETTINGS" SCOPE="$SCOPE" HOOK_CMD_BASE="$HOOK_CMD_BASE" python3 - <<'PY'
+  SETTINGS="$SETTINGS" SCOPE="$SCOPE" HOOK_CMD_BASE="$HOOK_CMD_BASE" python3 - <<'PY' || printf '  %s settings.json: parse error or missing key\n' "cannot read "
 import json, sys, os
 
 p = os.environ["SETTINGS"]
 scope = os.environ["SCOPE"]
 base = os.environ["HOOK_CMD_BASE"]
-with open(p) as f:
-    s = json.load(f)
+try:
+    with open(p) as f:
+        s = json.load(f)
+except (OSError, json.JSONDecodeError) as e:
+    print(f"  cannot parse settings.json: {e}")
+    sys.exit(1)
 
 OUR_CMDS = {
     "PreToolUse":  f"{base}/block-force-push.sh",

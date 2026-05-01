@@ -363,9 +363,41 @@ def has_go_doc_above(text: str, pos: int) -> bool:
 
 def has_phpdoc_above(text: str, pos: int) -> bool:
     head = text[:pos].rstrip()
+    # Skip back over any PHP #[Attribute(...)] decorations that may sit
+    # between the docblock and the symbol. PHP-CS-Fixer / Pint normalises
+    # docblock-then-attribute order, so the chars immediately before a
+    # symbol are often `]` rather than `*/`.
+    while head.endswith("]"):
+        stripped = _strip_trailing_php_attribute(head)
+        if stripped is None:
+            break
+        head = stripped.rstrip()
     if not head.endswith("*/"):
         return False
     return "/**" in head[-600:]
+
+
+def _strip_trailing_php_attribute(head: str) -> str | None:
+    """Return `head` with a trailing `#[...]` attribute removed, or None.
+
+    Walks back from the final `]`, tracking bracket depth so that
+    multi-line attributes (e.g. `#[Foo([\n  'a', 'b',\n])]`) are
+    consumed as a unit.
+    """
+    if not head.endswith("]"):
+        return None
+    depth = 0
+    for i in range(len(head) - 1, -1, -1):
+        c = head[i]
+        if c == "]":
+            depth += 1
+        elif c == "[":
+            depth -= 1
+            if depth == 0:
+                if i > 0 and head[i - 1] == "#":
+                    return head[: i - 1]
+                return None
+    return None
 
 
 def api_coverage(root: Path) -> dict[str, Any]:

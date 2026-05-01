@@ -1,0 +1,275 @@
+name: skill / harness
+
+on:
+  pull_request:
+    paths:
+      - skills/harness/**
+      - .github/workflows/skill-harness.yml
+  push:
+    branches: [main]
+    paths:
+      - skills/harness/**
+      - .github/workflows/skill-harness.yml
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Run shellcheck on every .sh in skills/harness
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          # SC2155: declare and assign separately — too noisy for these scripts.
+          # SC2034: unused variable — false-positives on label vars.
+          shellcheck -e SC2155,SC2034 \
+            skills/harness/scripts/*.sh \
+            skills/harness/assets/hooks/*.sh
+
+  roundtrip:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up isolated $HOME with skill at $HOME/.claude/skills/harness/
+        run: |
+          export TMPHOME="$RUNNER_TEMP/harness-test-home"
+          mkdir -p "$TMPHOME/.claude/skills"
+          cp -r skills/harness "$TMPHOME/.claude/skills/"
+          # Drop a fake package.json at $HOME so _detect_stack picks something up
+          # → exercises the auto-fill of '## Stack signals' in CLAUDE.md.
+          cat > "$TMPHOME/package.json" <<'JSON'
+          {
+            "dependencies": { "react": "^18.0.0", "next": "^14.0.0" },
+            "devDependencies": { "typescript": "^5.0.0", "vitest": "^1.0.0" },
+            "scripts": { "lint:check": "eslint .", "test": "vitest" }
+          }
+          JSON
+          echo "TMPHOME=$TMPHOME" >> $GITHUB_ENV
+          echo "SK=$TMPHOME/.claude/skills/harness" >> $GITHUB_ENV
+
+      - name: install (auto-detected user scope)
+        run: |
+          HOME="$TMPHOME" USER_PROJECT_KEY="-ci-test" SKILL_DIR="$SK" \
+            bash "$SK/scripts/install.sh"
+
+      - name: stack signals were auto-filled into CLAUDE.md
+        run: |
+          # Placeholder block should be gone; detected bullets should be present.
+          if grep -q "Replace with your default stack" "$TMPHOME/.claude/CLAUDE.md"; then
+            echo "::error::Stack signals placeholder still present after install — auto-fill didn't run"
+            grep -n "Stack signals" "$TMPHOME/.claude/CLAUDE.md" | head -5
+            exit 1
+          fi
+          # Detected bullets must include something from the fake package.json.
+          grep -E "TypeScript|Next|React|npm" "$TMPHOME/.claude/CLAUDE.md" >/dev/null \
+            || { echo "::error::detected stack bullets not found in CLAUDE.md"; sed -n '/## Stack signals/,/^## /p' "$TMPHOME/.claude/CLAUDE.md"; exit 1; }
+
+      - name: status — every surface should report installed/wired/set
+        run: |
+          out=$(HOME="$TMPHOME" USER_PROJECT_KEY="-ci-test" SKILL_DIR="$SK" \
+                bash "$SK/scripts/status.sh")
+          echo "$out"
+          echo "$out" | grep -q "missing" && { echo "::error::status reports missing surfaces after install"; exit 1; } || true
+          # CLAUDE.md is expected to differ from the template after install
+          # (stack signals were auto-filled). Filter it out before checking
+          # for any other 'modified' surfaces.
+          if echo "$out" | grep "modified" | grep -v "CLAUDE.md" | grep -q .; then
+            echo "::error::status reports modified non-CLAUDE.md surfaces on fresh install"
+            exit 1
+          fi
+
+      - name: re-install — should report 'already current'
+        run: |
+          out=$(HOME="$TMPHOME" USER_PROJECT_KEY="-ci-test" SKILL_DIR="$SK" \
+                bash "$SK/scripts/install.sh")
+          echo "$out"
+          echo "$out" | grep -q "already current" || { echo "::error::idempotency broken — second install didn't say 'already current'"; exit 1; }
+
+      - name: env-var insertion is tracked in 'changed' flag
+        run: |
+          python3 -c "
+          import json, sys
+          p = '$TMPHOME/.claude/settings.json'
+          s = json.load(open(p))
+          s.get('env', {}).pop('CLAUDE_CODE_AUTO_COMPACT_WINDOW', None)
+          json.dump(s, open(p, 'w'), indent=2)
+          "
+          out=$(HOME="$TMPHOME" USER_PROJECT_KEY="-ci-test" SKILL_DIR="$SK" \
+                bash "$SK/scripts/install.sh")
+          echo "$out"
+          echo "$out" | grep -q "settings.json updated" || { echo "::error::env-var change not detected as 'updated'"; exit 1; }
+
+      - name: block-force-push hook fires correctly
+        run: |
+          # Should block:
+          out=$(echo '{"tool_name":"Bash","tool_input":{"command":"git push --force origin main"}}' \
+                | "$TMPHOME/.claude/hooks/block-force-push.sh" 2>&1; echo "rc=$?")
+          echo "$out"
+          echo "$out" | grep -q "rc=2" || { echo "::error::force-push to main not blocked"; exit 1; }
+          # Should allow:
+          rc=$(echo '{"tool_name":"Bash","tool_input":{"command":"git push --force-with-lease origin feature"}}' \
+               | "$TMPHOME/.claude/hooks/block-force-push.sh" 2>/dev/null; echo $?)
+          [ "$rc" = "0" ] || { echo "::error::--force-with-lease incorrectly blocked"; exit 1; }
+          # Should allow (worktree branch -D):
+          rc=$(echo '{"tool_name":"Bash","tool_input":{"command":"git branch -D feature/foo"}}' \
+               | "$TMPHOME/.claude/hooks/block-force-push.sh" 2>/dev/null; echo $?)
+          [ "$rc" = "0" ] || { echo "::error::worktree branch -D should be allowed"; exit 1; }
+          # Should block (protected branch -D):
+          rc=$(echo '{"tool_name":"Bash","tool_input":{"command":"git branch -D main"}}' \
+               | "$TMPHOME/.claude/hooks/block-force-push.sh" 2>/dev/null; echo $?)
+          [ "$rc" = "2" ] || { echo "::error::branch -D main should be blocked"; exit 1; }
+          # Should block (refspec push-delete of protected branch):
+          rc=$(echo '{"tool_name":"Bash","tool_input":{"command":"git push origin :main"}}' \
+               | "$TMPHOME/.claude/hooks/block-force-push.sh" 2>/dev/null; echo $?)
+          [ "$rc" = "2" ] || { echo "::error::refspec push-delete of main should be blocked"; exit 1; }
+          rc=$(echo '{"tool_name":"Bash","tool_input":{"command":"git push origin :refs/heads/master"}}' \
+               | "$TMPHOME/.claude/hooks/block-force-push.sh" 2>/dev/null; echo $?)
+          [ "$rc" = "2" ] || { echo "::error::refspec push-delete refs/heads/master should be blocked"; exit 1; }
+          # Should allow (refspec push-delete of feature branch):
+          rc=$(echo '{"tool_name":"Bash","tool_input":{"command":"git push origin :feature/foo"}}' \
+               | "$TMPHOME/.claude/hooks/block-force-push.sh" 2>/dev/null; echo $?)
+          [ "$rc" = "0" ] || { echo "::error::refspec push-delete of feature branch incorrectly blocked"; exit 1; }
+          # Should block (--delete on protected branch):
+          rc=$(echo '{"tool_name":"Bash","tool_input":{"command":"git push --delete origin main"}}' \
+               | "$TMPHOME/.claude/hooks/block-force-push.sh" 2>/dev/null; echo $?)
+          [ "$rc" = "2" ] || { echo "::error::git push --delete origin main should be blocked"; exit 1; }
+          # Should block (+refspec to protected branch — force without --force):
+          rc=$(echo '{"tool_name":"Bash","tool_input":{"command":"git push origin +HEAD:main"}}' \
+               | "$TMPHOME/.claude/hooks/block-force-push.sh" 2>/dev/null; echo $?)
+          [ "$rc" = "2" ] || { echo "::error::+refspec push to main should be blocked"; exit 1; }
+
+      - name: settings.json write is atomic (no .tmp leftover)
+        run: |
+          HOME="$TMPHOME" USER_PROJECT_KEY="-ci-test" SKILL_DIR="$SK" \
+            bash "$SK/scripts/install.sh" --force > /dev/null
+          [ ! -e "$TMPHOME/.claude/settings.json.tmp" ] \
+            || { echo "::error::settings.json.tmp left behind — atomic rename failed"; exit 1; }
+          python3 -m json.tool < "$TMPHOME/.claude/settings.json" > /dev/null \
+            || { echo "::error::settings.json is not valid JSON after install"; exit 1; }
+
+      - name: modify a hook → status reports 'modified'
+        run: |
+          echo "# user customisation" >> "$TMPHOME/.claude/hooks/format-on-edit.sh"
+          out=$(HOME="$TMPHOME" USER_PROJECT_KEY="-ci-test" SKILL_DIR="$SK" \
+                bash "$SK/scripts/status.sh")
+          echo "$out" | grep "format-on-edit" | grep -q modified \
+            || { echo "::error::status didn't flag modified hook"; exit 1; }
+
+      - name: uninstall (default) — keeps modified hook, removes the rest
+        run: |
+          out=$(HOME="$TMPHOME" USER_PROJECT_KEY="-ci-test" SKILL_DIR="$SK" \
+                bash "$SK/scripts/uninstall.sh")
+          echo "$out"
+          echo "$out" | grep -q "keep (modified)" || { echo "::error::uninstall didn't preserve modified hook"; exit 1; }
+          echo "$out" | grep -q "keeping memory" || { echo "::error::uninstall removed memory at default level"; exit 1; }
+
+      - name: uninstall --all — full sweep
+        run: |
+          # Re-install for the --all test
+          HOME="$TMPHOME" USER_PROJECT_KEY="-ci-test" SKILL_DIR="$SK" \
+            bash "$SK/scripts/install.sh" --force > /dev/null
+          HOME="$TMPHOME" USER_PROJECT_KEY="-ci-test" SKILL_DIR="$SK" \
+            bash "$SK/scripts/uninstall.sh" --all > /dev/null
+          left=$(find "$TMPHOME/.claude" -type f -not -path '*/skills/*' | wc -l | tr -d ' ')
+          [ "$left" = "1" ] || { echo "::error::--all left $left files behind (expected 1: settings.json={})"; exit 1; }
+          settings=$(cat "$TMPHOME/.claude/settings.json")
+          [ "$settings" = "{}" ] || { echo "::error::settings.json after --all is not {}: $settings"; exit 1; }
+
+      - name: project-scope install (skill at <proj>/.claude/skills/harness/)
+        run: |
+          PROJ="$RUNNER_TEMP/proj-scope"
+          mkdir -p "$PROJ/proj/.claude/skills"
+          cp -r skills/harness "$PROJ/proj/.claude/skills/"
+          export HOME_NEW="$PROJ/home"
+          mkdir -p "$HOME_NEW"
+          HOME="$HOME_NEW" USER_PROJECT_KEY="-ci-proj" \
+            SKILL_DIR="$PROJ/proj/.claude/skills/harness" \
+            bash "$PROJ/proj/.claude/skills/harness/scripts/install.sh"
+          # Hooks must be at <proj>/.claude/hooks/, not under $HOME
+          test -f "$PROJ/proj/.claude/hooks/block-force-push.sh" \
+            || { echo "::error::project-scope hooks not installed"; exit 1; }
+          test ! -d "$HOME_NEW/.claude/hooks" \
+            || { echo "::error::project-scope install touched \$HOME"; exit 1; }
+          # settings.json hook command should use $CLAUDE_PROJECT_DIR
+          grep -q 'CLAUDE_PROJECT_DIR' "$PROJ/proj/.claude/settings.json" \
+            || { echo "::error::project settings missing CLAUDE_PROJECT_DIR in hook commands"; exit 1; }
+
+      - name: adopt drops harness-check.sh starter and refuses $HOME
+        run: |
+          PROJ="$RUNNER_TEMP/adopt-test"
+          mkdir -p "$PROJ"
+          # Pretend it's a Node project so the detector emits something.
+          echo '{"scripts":{"lint:check":"echo lint","test":"echo test"}}' > "$PROJ/package.json"
+          out=$(SKILL_DIR="$SK" bash "$SK/scripts/adopt.sh" --target="$PROJ")
+          echo "$out"
+          test -x "$PROJ/scripts/harness-check.sh" \
+            || { echo "::error::adopt didn't write scripts/harness-check.sh"; exit 1; }
+          echo "$out" | grep -q "Stack signals" \
+            || { echo "::error::adopt preflight missing Stack signals section"; exit 1; }
+          # Re-running without --force keeps the existing file
+          echo "# user-edit" >> "$PROJ/scripts/harness-check.sh"
+          before=$(sha256sum "$PROJ/scripts/harness-check.sh" 2>/dev/null || shasum -a 256 "$PROJ/scripts/harness-check.sh" | awk '{print $1}')
+          SKILL_DIR="$SK" bash "$SK/scripts/adopt.sh" --target="$PROJ" > /dev/null
+          after=$(sha256sum "$PROJ/scripts/harness-check.sh" 2>/dev/null || shasum -a 256 "$PROJ/scripts/harness-check.sh" | awk '{print $1}')
+          [ "$before" = "$after" ] || { echo "::error::adopt overwrote a customised harness-check.sh without --force"; exit 1; }
+          # Refuse $HOME
+          rc=$(SKILL_DIR="$SK" bash "$SK/scripts/adopt.sh" --target="$HOME" >/dev/null 2>&1; echo $?)
+          [ "$rc" = "2" ] || { echo "::error::adopt should refuse \$HOME with exit 2"; exit 1; }
+          # Starter has at least one sensor wired by virtue of grep matching package.json
+          grep -q "step \"npm run lint:check\"" "$PROJ/scripts/harness-check.sh" \
+            || { echo "::error::starter harness-check.sh missing the npm lint:check block"; exit 1; }
+
+      - name: doctor — exits 0 against a healthy install
+        run: |
+          # Re-install to undo the prior --all sweep + uninstall round.
+          HOME="$TMPHOME" USER_PROJECT_KEY="-ci-test" SKILL_DIR="$SK" \
+            bash "$SK/scripts/install.sh" --force > /dev/null
+          out=$(HOME="$TMPHOME" USER_PROJECT_KEY="-ci-test" SKILL_DIR="$SK" \
+                bash "$SK/scripts/doctor.sh" 2>&1)
+          echo "$out"
+          echo "$out" | grep -q "0 fail" || { echo "::error::doctor reported failures on a fresh install"; exit 1; }
+          echo "$out" | grep -q "block-force-push.sh fires correctly" \
+            || { echo "::error::doctor missing block-force-push smoke result"; exit 1; }
+
+      - name: update — identical files are no-op, modified files are skipped + diffed
+        run: |
+          # Modify a hook so update has something to skip + diff.
+          echo "# user customisation for update test" >> "$TMPHOME/.claude/hooks/format-on-edit.sh"
+          mtime_before=$(stat -c '%Y' "$TMPHOME/.claude/hooks/block-force-push.sh" 2>/dev/null \
+                       || stat -f '%m' "$TMPHOME/.claude/hooks/block-force-push.sh")
+          out=$(HOME="$TMPHOME" USER_PROJECT_KEY="-ci-test" SKILL_DIR="$SK" \
+                bash "$SK/scripts/update.sh" 2>&1)
+          echo "$out"
+          # Modified file must be flagged as such.
+          echo "$out" | grep "format-on-edit.sh" | grep -q "modified" \
+            || { echo "::error::update.sh didn't flag modified format-on-edit.sh"; exit 1; }
+          # Identical file must NOT be rewritten — mtime should be unchanged.
+          mtime_after=$(stat -c '%Y' "$TMPHOME/.claude/hooks/block-force-push.sh" 2>/dev/null \
+                      || stat -f '%m' "$TMPHOME/.claude/hooks/block-force-push.sh")
+          [ "$mtime_before" = "$mtime_after" ] \
+            || { echo "::error::update.sh rewrote an identical file (mtime $mtime_before → $mtime_after)"; exit 1; }
+          # Modified file must NOT be overwritten without --force.
+          tail -1 "$TMPHOME/.claude/hooks/format-on-edit.sh" | grep -q "user customisation" \
+            || { echo "::error::update.sh clobbered a customised file without --force"; exit 1; }
+
+      - name: update --merge writes <file>.new alongside
+        run: |
+          out=$(HOME="$TMPHOME" USER_PROJECT_KEY="-ci-test" SKILL_DIR="$SK" \
+                bash "$SK/scripts/update.sh" --merge 2>&1)
+          echo "$out"
+          [ -f "$TMPHOME/.claude/hooks/format-on-edit.sh.new" ] \
+            || { echo "::error::update --merge didn't write format-on-edit.sh.new"; exit 1; }
+          # Original is still customised.
+          tail -1 "$TMPHOME/.claude/hooks/format-on-edit.sh" | grep -q "user customisation" \
+            || { echo "::error::update --merge overwrote the original"; exit 1; }
+
+      - name: ambiguous scope (no .claude ancestor) errors helpfully
+        run: |
+          out=$(SKILL_DIR="$PWD/skills/harness" bash skills/harness/scripts/install.sh 2>&1; echo "rc=$?")
+          echo "$out"
+          echo "$out" | grep -q "rc=2" || { echo "::error::ambiguous scope should exit 2"; exit 1; }
+          echo "$out" | grep -q "auto-detect scope" || { echo "::error::ambiguous error message missing 'auto-detect scope'"; exit 1; }

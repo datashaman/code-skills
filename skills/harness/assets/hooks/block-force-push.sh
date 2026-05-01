@@ -77,12 +77,20 @@ while IFS= read -r seg; do
   if echo "$seg" | grep -Eq '^[[:space:]]*git[[:space:]]+(checkout|restore)[[:space:]]+\.[[:space:]]*$'; then
     block "$seg" "wholesale discard of working tree"
   fi
-  if echo "$seg" | grep -Eq '^[[:space:]]*git[[:space:]]+branch[[:space:]]+-D[[:space:]]'; then
-    block "$seg" "force-delete branch"
+  # Force-delete branch — only block on protected names. Worktree workflows
+  # rely on `git branch -D` for completed feature branches, so the rule has
+  # to be specific. Block: main, master, develop, trunk, production, staging,
+  # and any release/* or release-* branch.
+  if echo "$seg" | grep -Eq '^[[:space:]]*git[[:space:]]+branch[[:space:]]+-D[[:space:]]+(main|master|develop|trunk|production|prod|staging|release[/-])'; then
+    block "$seg" "force-delete protected branch"
   fi
   if echo "$seg" | grep -Eq '^[[:space:]]*git[[:space:]]+(commit|merge|push|rebase)[[:space:]].*--no-verify'; then
     block "$seg" "skipping git hooks (--no-verify)"
   fi
+  # The \$HOME pattern matches the literal string "$HOME" in user shell commands.
+  # Single quotes preserve the regex unchanged for grep — SC2016 is a false
+  # positive here (we don't want shell to expand $HOME).
+  # shellcheck disable=SC2016
   if echo "$seg" | grep -Eq '^[[:space:]]*rm[[:space:]]+(-[rRf]+[[:space:]]+)+(/|~|\$HOME|/\*|~/?\*)([[:space:]]|$)'; then
     block "$seg" "rm -rf on \$HOME or /"
   fi

@@ -33,5 +33,7 @@
 ## When the harness disagrees with you
 The harness is authoritative. If a sensor (lint/types/tests) is wrong, fix the rule in the same change with a one-line rationale. Silently disabling a check is worse than the original bug.
 
+The verify-before-stop hook only fires when the working tree has uncommitted changes — read-only sessions can stop normally. If you legitimately need to stop with work in progress (e.g., handing off to the user mid-debug), set `CLAUDE_SKIP_VERIFY=1` for that turn.
+
 ## Memory
 The auto-memory system at `~/.claude/projects/<your-project-slug>/memory/` is active — read `MEMORY.md` and update it when you learn durable facts about me, my projects, or my preferences.

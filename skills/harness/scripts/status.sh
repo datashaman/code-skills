@@ -63,11 +63,14 @@ fi
 
 USER_PROJECT_KEY="${USER_PROJECT_KEY:-$(printf '%s' "$HOME" | tr '/' '-')}"
 MEMORY_DIR="$HOME/.claude/projects/$USER_PROJECT_KEY/memory"
+# See install.sh comment — these are literal strings written into settings.json.
 if [ "$SCOPE" = "user" ]; then
+  # shellcheck disable=SC2088
   HOOK_CMD_BASE='~/.claude/hooks'
   CLAUDE_MD_PATH="$TARGET/CLAUDE.md"
 else
-  HOOK_CMD_BASE='.claude/hooks'
+  # shellcheck disable=SC2016
+  HOOK_CMD_BASE='"$CLAUDE_PROJECT_DIR"/.claude/hooks'
   CLAUDE_MD_PATH="$(dirname "$TARGET")/CLAUDE.md"
 fi
 
@@ -200,7 +203,7 @@ fi
 if [ -n "${SNAPSHOT_REPO:-}" ] && [ -d "$SNAPSHOT_REPO/.git" ]; then
   echo
   echo "snapshot ($SNAPSHOT_REPO)"
-  cd "$SNAPSHOT_REPO"
+  cd "$SNAPSHOT_REPO" || { echo "  (cannot cd into $SNAPSHOT_REPO)"; exit 0; }
   last_commit="$(git log -1 --format='%cr  %s' 2>/dev/null || echo unknown)"
   ahead="$(git rev-list --count '@{upstream}..HEAD' 2>/dev/null || echo '?')"
   behind="$(git rev-list --count 'HEAD..@{upstream}' 2>/dev/null || echo '?')"

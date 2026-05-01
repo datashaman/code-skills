@@ -104,11 +104,14 @@ fi
 USER_PROJECT_KEY="${USER_PROJECT_KEY:-$(printf '%s' "$HOME" | tr '/' '-')}"
 MEMORY_DIR="$HOME/.claude/projects/$USER_PROJECT_KEY/memory"
 
+# See install.sh comment — these are literal strings written into settings.json.
 if [ "$SCOPE" = "user" ]; then
+  # shellcheck disable=SC2088
   HOOK_CMD_BASE='~/.claude/hooks'
   CLAUDE_MD_PATH="$TARGET/CLAUDE.md"
 else
-  HOOK_CMD_BASE='.claude/hooks'
+  # shellcheck disable=SC2016
+  HOOK_CMD_BASE='"$CLAUDE_PROJECT_DIR"/.claude/hooks'
   CLAUDE_MD_PATH="$(dirname "$TARGET")/CLAUDE.md"
 fi
 
@@ -136,7 +139,7 @@ sha256_eq() {
 }
 
 remove_safe() {
-  local installed="$1" template="$2" label="$3"
+  local installed="$1" template="$2"
   if [ ! -e "$installed" ]; then
     return 0
   fi
@@ -206,7 +209,7 @@ else
   say "removing hooks"
   for f in "$ASSETS/hooks/"*.sh; do
     name="$(basename "$f")"
-    remove_safe "$TARGET/hooks/$name" "$f" "hook"
+    remove_safe "$TARGET/hooks/$name" "$f"
   done
 fi
 
@@ -217,7 +220,7 @@ else
   say "removing slash commands"
   for f in "$ASSETS/commands/"*.md; do
     name="$(basename "$f")"
-    remove_safe "$TARGET/commands/$name" "$f" "command"
+    remove_safe "$TARGET/commands/$name" "$f"
   done
 fi
 
@@ -228,7 +231,7 @@ elif [ $REMOVE_MEMORY -eq 1 ]; then
   say "removing memory templates"
   for f in "$ASSETS/memory/"*.tmpl; do
     name="$(basename "$f" .tmpl)"
-    remove_safe "$MEMORY_DIR/$name" "$f" "memory"
+    remove_safe "$MEMORY_DIR/$name" "$f"
   done
 else
   say "keeping memory (pass --remove-memory to opt in)"
@@ -244,7 +247,7 @@ else
 fi
 if [ $REMOVE_CLAUDE_MD -eq 1 ]; then
   say "removing CLAUDE.md"
-  remove_safe "$CLAUDE_MD_PATH" "$ASSETS/CLAUDE.md.tmpl" "CLAUDE.md"
+  remove_safe "$CLAUDE_MD_PATH" "$ASSETS/CLAUDE.md.tmpl"
 else
   say "keeping CLAUDE.md (pass --remove-claude-md to opt in)"
 fi

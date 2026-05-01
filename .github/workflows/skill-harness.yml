@@ -1,0 +1,151 @@
+name: skill / harness
+
+on:
+  pull_request:
+    paths:
+      - skills/harness/**
+      - .github/workflows/skill-harness.yml
+  push:
+    branches: [main]
+    paths:
+      - skills/harness/**
+      - .github/workflows/skill-harness.yml
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run shellcheck on every .sh in skills/harness
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          # SC2155: declare and assign separately — too noisy for these scripts.
+          # SC2034: unused variable — false-positives on label vars.
+          shellcheck -e SC2155,SC2034 \
+            skills/harness/scripts/*.sh \
+            skills/harness/assets/hooks/*.sh
+
+  roundtrip:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up isolated $HOME with skill at $HOME/.claude/skills/harness/
+        run: |
+          export TMPHOME="$RUNNER_TEMP/harness-test-home"
+          mkdir -p "$TMPHOME/.claude/skills"
+          cp -r skills/harness "$TMPHOME/.claude/skills/"
+          echo "TMPHOME=$TMPHOME" >> $GITHUB_ENV
+          echo "SK=$TMPHOME/.claude/skills/harness" >> $GITHUB_ENV
+
+      - name: install (auto-detected user scope)
+        run: |
+          HOME="$TMPHOME" USER_PROJECT_KEY="-ci-test" SKILL_DIR="$SK" \
+            bash "$SK/scripts/install.sh"
+
+      - name: status — every surface should report installed/wired/set
+        run: |
+          out=$(HOME="$TMPHOME" USER_PROJECT_KEY="-ci-test" SKILL_DIR="$SK" \
+                bash "$SK/scripts/status.sh")
+          echo "$out"
+          echo "$out" | grep -q "missing" && { echo "::error::status reports missing surfaces after install"; exit 1; } || true
+          echo "$out" | grep -q "modified" && { echo "::error::status reports modified surfaces on fresh install"; exit 1; } || true
+
+      - name: re-install — should report 'already current'
+        run: |
+          out=$(HOME="$TMPHOME" USER_PROJECT_KEY="-ci-test" SKILL_DIR="$SK" \
+                bash "$SK/scripts/install.sh")
+          echo "$out"
+          echo "$out" | grep -q "already current" || { echo "::error::idempotency broken — second install didn't say 'already current'"; exit 1; }
+
+      - name: env-var insertion is tracked in 'changed' flag
+        run: |
+          python3 -c "
+          import json, sys
+          p = '$TMPHOME/.claude/settings.json'
+          s = json.load(open(p))
+          s.get('env', {}).pop('CLAUDE_CODE_AUTO_COMPACT_WINDOW', None)
+          json.dump(s, open(p, 'w'), indent=2)
+          "
+          out=$(HOME="$TMPHOME" USER_PROJECT_KEY="-ci-test" SKILL_DIR="$SK" \
+                bash "$SK/scripts/install.sh")
+          echo "$out"
+          echo "$out" | grep -q "settings.json updated" || { echo "::error::env-var change not detected as 'updated'"; exit 1; }
+
+      - name: block-force-push hook fires correctly
+        run: |
+          # Should block:
+          out=$(echo '{"tool_name":"Bash","tool_input":{"command":"git push --force origin main"}}' \
+                | "$TMPHOME/.claude/hooks/block-force-push.sh" 2>&1; echo "rc=$?")
+          echo "$out"
+          echo "$out" | grep -q "rc=2" || { echo "::error::force-push to main not blocked"; exit 1; }
+          # Should allow:
+          rc=$(echo '{"tool_name":"Bash","tool_input":{"command":"git push --force-with-lease origin feature"}}' \
+               | "$TMPHOME/.claude/hooks/block-force-push.sh" 2>/dev/null; echo $?)
+          [ "$rc" = "0" ] || { echo "::error::--force-with-lease incorrectly blocked"; exit 1; }
+          # Should allow (worktree branch -D):
+          rc=$(echo '{"tool_name":"Bash","tool_input":{"command":"git branch -D feature/foo"}}' \
+               | "$TMPHOME/.claude/hooks/block-force-push.sh" 2>/dev/null; echo $?)
+          [ "$rc" = "0" ] || { echo "::error::worktree branch -D should be allowed"; exit 1; }
+          # Should block (protected branch -D):
+          rc=$(echo '{"tool_name":"Bash","tool_input":{"command":"git branch -D main"}}' \
+               | "$TMPHOME/.claude/hooks/block-force-push.sh" 2>/dev/null; echo $?)
+          [ "$rc" = "2" ] || { echo "::error::branch -D main should be blocked"; exit 1; }
+
+      - name: modify a hook → status reports 'modified'
+        run: |
+          echo "# user customisation" >> "$TMPHOME/.claude/hooks/format-on-edit.sh"
+          out=$(HOME="$TMPHOME" USER_PROJECT_KEY="-ci-test" SKILL_DIR="$SK" \
+                bash "$SK/scripts/status.sh")
+          echo "$out" | grep "format-on-edit" | grep -q modified \
+            || { echo "::error::status didn't flag modified hook"; exit 1; }
+
+      - name: uninstall (default) — keeps modified hook, removes the rest
+        run: |
+          out=$(HOME="$TMPHOME" USER_PROJECT_KEY="-ci-test" SKILL_DIR="$SK" \
+                bash "$SK/scripts/uninstall.sh")
+          echo "$out"
+          echo "$out" | grep -q "keep (modified)" || { echo "::error::uninstall didn't preserve modified hook"; exit 1; }
+          echo "$out" | grep -q "keeping memory" || { echo "::error::uninstall removed memory at default level"; exit 1; }
+
+      - name: uninstall --all — full sweep
+        run: |
+          # Re-install for the --all test
+          HOME="$TMPHOME" USER_PROJECT_KEY="-ci-test" SKILL_DIR="$SK" \
+            bash "$SK/scripts/install.sh" --force > /dev/null
+          HOME="$TMPHOME" USER_PROJECT_KEY="-ci-test" SKILL_DIR="$SK" \
+            bash "$SK/scripts/uninstall.sh" --all > /dev/null
+          left=$(find "$TMPHOME/.claude" -type f -not -path '*/skills/*' | wc -l | tr -d ' ')
+          [ "$left" = "1" ] || { echo "::error::--all left $left files behind (expected 1: settings.json={})"; exit 1; }
+          settings=$(cat "$TMPHOME/.claude/settings.json")
+          [ "$settings" = "{}" ] || { echo "::error::settings.json after --all is not {}: $settings"; exit 1; }
+
+      - name: project-scope install (skill at <proj>/.claude/skills/harness/)
+        run: |
+          PROJ="$RUNNER_TEMP/proj-scope"
+          mkdir -p "$PROJ/proj/.claude/skills"
+          cp -r skills/harness "$PROJ/proj/.claude/skills/"
+          export HOME_NEW="$PROJ/home"
+          mkdir -p "$HOME_NEW"
+          HOME="$HOME_NEW" USER_PROJECT_KEY="-ci-proj" \
+            SKILL_DIR="$PROJ/proj/.claude/skills/harness" \
+            bash "$PROJ/proj/.claude/skills/harness/scripts/install.sh"
+          # Hooks must be at <proj>/.claude/hooks/, not under $HOME
+          test -f "$PROJ/proj/.claude/hooks/block-force-push.sh" \
+            || { echo "::error::project-scope hooks not installed"; exit 1; }
+          test ! -d "$HOME_NEW/.claude/hooks" \
+            || { echo "::error::project-scope install touched \$HOME"; exit 1; }
+          # settings.json hook command should use $CLAUDE_PROJECT_DIR
+          grep -q 'CLAUDE_PROJECT_DIR' "$PROJ/proj/.claude/settings.json" \
+            || { echo "::error::project settings missing CLAUDE_PROJECT_DIR in hook commands"; exit 1; }
+
+      - name: ambiguous scope (no .claude ancestor) errors helpfully
+        run: |
+          out=$(SKILL_DIR="$PWD/skills/harness" bash skills/harness/scripts/install.sh 2>&1; echo "rc=$?")
+          echo "$out"
+          echo "$out" | grep -q "rc=2" || { echo "::error::ambiguous scope should exit 2"; exit 1; }
+          echo "$out" | grep -q "auto-detect scope" || { echo "::error::ambiguous error message missing 'auto-detect scope'"; exit 1; }

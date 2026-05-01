@@ -129,10 +129,16 @@ MEMORY_DIR="$HOME/.claude/projects/$USER_PROJECT_KEY/memory"
 # Hook command paths written into settings.json. User scope uses the portable
 # tilde form; project scope uses a project-relative path (cwd is the project
 # root when Claude Code runs hooks).
+# Hook command paths are written verbatim into settings.json — Claude Code
+# expands ~ and $CLAUDE_PROJECT_DIR at hook-execution time. We want these as
+# literal strings in the JSON, so the SC2088 (tilde) and SC2016 ($var) hints
+# are intentional and suppressed below.
 if [ "$SCOPE" = "user" ]; then
+  # shellcheck disable=SC2088
   HOOK_CMD_BASE='~/.claude/hooks'
 else
-  HOOK_CMD_BASE='.claude/hooks'
+  # shellcheck disable=SC2016
+  HOOK_CMD_BASE='"$CLAUDE_PROJECT_DIR"/.claude/hooks'
 fi
 
 say() { echo "→ $*"; }
@@ -178,10 +184,10 @@ plan_line() {
   [ -n "$desc" ] && printf '         %s\n' "$desc"
 }
 
-# Determine scope-conditional auto-skips.
+# Determine scope-conditional auto-skips. (Env-var gating is handled inline
+# in the settings.json patcher below — only memory needs a plan-line marker.)
 PROJECT_SCOPE_NO_MEMORY=0
-PROJECT_SCOPE_NO_ENV=0
-[ "$SCOPE" != "user" ] && PROJECT_SCOPE_NO_MEMORY=1 && PROJECT_SCOPE_NO_ENV=1
+[ "$SCOPE" != "user" ] && PROJECT_SCOPE_NO_MEMORY=1
 
 cat <<EOF
 ══════════════════════════════════════════════════════════════════════
@@ -238,19 +244,57 @@ if [ "$SCOPE" = "user" ] && [ $SKIP_MEMORY -eq 0 ]; then
 fi
 [ ${#DIRS_TO_MAKE[@]} -gt 0 ] && do_or_dry mkdir -p "${DIRS_TO_MAKE[@]}"
 
-# 2. CLAUDE.md.
+# 2. CLAUDE.md — copy the template, then auto-fill the ## Stack signals
+# section if a stack manifest is detected at the project root.
+fill_stack_signals() {
+  local md="$1"        # path to the freshly installed CLAUDE.md
+  local detect_root="$2"  # dir to scan for manifests
+  [ -f "$md" ] || return 0
+  local detected
+  detected="$(python3 "$SKILL_DIR/scripts/_detect_stack.py" "$detect_root" 2>/dev/null || true)"
+  if [ -z "$detected" ]; then
+    return 0  # no manifests — leave the placeholder in place for the user to fill
+  fi
+  # Replace the placeholder block (the HTML comment "Replace with your default
+  # stack..." + its example block) with the detected bullets. Use python for
+  # robust multi-line replacement.
+  CLAUDE_MD="$md" DETECTED="$detected" python3 - <<'PY'
+import os, re
+p = os.environ["CLAUDE_MD"]
+detected = os.environ["DETECTED"].rstrip()
+text = open(p).read()
+# Match: <!-- Replace with your default stack ... --> through the closing -->
+# of the example block. Be flexible about exact whitespace.
+pattern = re.compile(
+    r"<!--\s*Replace with your default stack\..*?-->\s*\n"
+    r"(<!--\s*Example:.*?-->\s*\n)?",
+    re.DOTALL,
+)
+new = pattern.sub(detected + "\n", text, count=1)
+if new != text:
+    open(p, "w").write(new)
+    print(f"  auto-filled Stack signals from manifests in {os.environ.get('DETECT_ROOT', '.')}")
+PY
+}
+
 if [ $SKIP_CLAUDE_MD -eq 1 ]; then
   say "skipping CLAUDE.md (--skip-claude-md)"
 elif [ "$SCOPE" = "user" ]; then
   say "installing global CLAUDE.md"
   copy_safe "$ASSETS/CLAUDE.md.tmpl" "$TARGET/CLAUDE.md"
+  # At user scope, scan the user's home for a top-level manifest. Usually
+  # there isn't one — the section will stay as a placeholder for hand-edit.
+  # But if the user keeps a default-project at $HOME, this picks it up.
+  [ $DRY -eq 0 ] && DETECT_ROOT="$HOME" fill_stack_signals "$TARGET/CLAUDE.md" "$HOME"
 else
-  PROJECT_CLAUDE_MD="$(dirname "$TARGET")/CLAUDE.md"
+  PROJECT_ROOT="$(dirname "$TARGET")"
+  PROJECT_CLAUDE_MD="$PROJECT_ROOT/CLAUDE.md"
   if [ -e "$PROJECT_CLAUDE_MD" ] && [ $FORCE -eq 0 ]; then
     say "skipping CLAUDE.md (project already has one at $PROJECT_CLAUDE_MD — merge by hand, or --force)"
   else
     say "installing project CLAUDE.md"
     copy_safe "$ASSETS/CLAUDE.md.tmpl" "$PROJECT_CLAUDE_MD"
+    [ $DRY -eq 0 ] && DETECT_ROOT="$PROJECT_ROOT" fill_stack_signals "$PROJECT_CLAUDE_MD" "$PROJECT_ROOT"
   fi
 fi
 

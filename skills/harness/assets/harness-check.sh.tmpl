@@ -27,7 +27,7 @@ fi
 # PHP / Laravel.
 if [ -f composer.json ]; then
   grep -q '"lint:check"' composer.json && { step "composer lint:check" composer lint:check; ran=1; }
-  [ -x ./vendor/bin/pint ] && grep -q '"format:check"\|"pint"' composer.json && { step "pint --test" ./vendor/bin/pint --test; ran=1; }
+  [ -x ./vendor/bin/pint ] && { step "pint --test" ./vendor/bin/pint --test; ran=1; }
   [ -x ./vendor/bin/phpstan ] && { step "phpstan" ./vendor/bin/phpstan analyse --no-progress; ran=1; }
   [ -x ./vendor/bin/pest ] && { step "pest" ./vendor/bin/pest; ran=1; }
   [ -x ./vendor/bin/phpunit ] && [ ! -x ./vendor/bin/pest ] && { step "phpunit" ./vendor/bin/phpunit; ran=1; }

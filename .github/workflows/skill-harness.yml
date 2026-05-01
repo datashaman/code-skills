@@ -39,6 +39,15 @@ jobs:
           export TMPHOME="$RUNNER_TEMP/harness-test-home"
           mkdir -p "$TMPHOME/.claude/skills"
           cp -r skills/harness "$TMPHOME/.claude/skills/"
+          # Drop a fake package.json at $HOME so _detect_stack picks something up
+          # → exercises the auto-fill of '## Stack signals' in CLAUDE.md.
+          cat > "$TMPHOME/package.json" <<'JSON'
+          {
+            "dependencies": { "react": "^18.0.0", "next": "^14.0.0" },
+            "devDependencies": { "typescript": "^5.0.0", "vitest": "^1.0.0" },
+            "scripts": { "lint:check": "eslint .", "test": "vitest" }
+          }
+          JSON
           echo "TMPHOME=$TMPHOME" >> $GITHUB_ENV
           echo "SK=$TMPHOME/.claude/skills/harness" >> $GITHUB_ENV
 
@@ -46,6 +55,18 @@ jobs:
         run: |
           HOME="$TMPHOME" USER_PROJECT_KEY="-ci-test" SKILL_DIR="$SK" \
             bash "$SK/scripts/install.sh"
+
+      - name: stack signals were auto-filled into CLAUDE.md
+        run: |
+          # Placeholder block should be gone; detected bullets should be present.
+          if grep -q "Replace with your default stack" "$TMPHOME/.claude/CLAUDE.md"; then
+            echo "::error::Stack signals placeholder still present after install — auto-fill didn't run"
+            grep -n "Stack signals" "$TMPHOME/.claude/CLAUDE.md" | head -5
+            exit 1
+          fi
+          # Detected bullets must include something from the fake package.json.
+          grep -E "TypeScript|Next|React|npm" "$TMPHOME/.claude/CLAUDE.md" >/dev/null \
+            || { echo "::error::detected stack bullets not found in CLAUDE.md"; sed -n '/## Stack signals/,/^## /p' "$TMPHOME/.claude/CLAUDE.md"; exit 1; }
 
       - name: status — every surface should report installed/wired/set
         run: |
@@ -195,6 +216,50 @@ jobs:
           # Starter has at least one sensor wired by virtue of grep matching package.json
           grep -q "step \"npm run lint:check\"" "$PROJ/scripts/harness-check.sh" \
             || { echo "::error::starter harness-check.sh missing the npm lint:check block"; exit 1; }
+
+      - name: doctor — exits 0 against a healthy install
+        run: |
+          # Re-install to undo the prior --all sweep + uninstall round.
+          HOME="$TMPHOME" USER_PROJECT_KEY="-ci-test" SKILL_DIR="$SK" \
+            bash "$SK/scripts/install.sh" --force > /dev/null
+          out=$(HOME="$TMPHOME" USER_PROJECT_KEY="-ci-test" SKILL_DIR="$SK" \
+                bash "$SK/scripts/doctor.sh" 2>&1)
+          echo "$out"
+          echo "$out" | grep -q "0 fail" || { echo "::error::doctor reported failures on a fresh install"; exit 1; }
+          echo "$out" | grep -q "block-force-push.sh fires correctly" \
+            || { echo "::error::doctor missing block-force-push smoke result"; exit 1; }
+
+      - name: update — identical files are no-op, modified files are skipped + diffed
+        run: |
+          # Modify a hook so update has something to skip + diff.
+          echo "# user customisation for update test" >> "$TMPHOME/.claude/hooks/format-on-edit.sh"
+          mtime_before=$(stat -c '%Y' "$TMPHOME/.claude/hooks/block-force-push.sh" 2>/dev/null \
+                       || stat -f '%m' "$TMPHOME/.claude/hooks/block-force-push.sh")
+          out=$(HOME="$TMPHOME" USER_PROJECT_KEY="-ci-test" SKILL_DIR="$SK" \
+                bash "$SK/scripts/update.sh" 2>&1)
+          echo "$out"
+          # Modified file must be flagged as such.
+          echo "$out" | grep "format-on-edit.sh" | grep -q "modified" \
+            || { echo "::error::update.sh didn't flag modified format-on-edit.sh"; exit 1; }
+          # Identical file must NOT be rewritten — mtime should be unchanged.
+          mtime_after=$(stat -c '%Y' "$TMPHOME/.claude/hooks/block-force-push.sh" 2>/dev/null \
+                      || stat -f '%m' "$TMPHOME/.claude/hooks/block-force-push.sh")
+          [ "$mtime_before" = "$mtime_after" ] \
+            || { echo "::error::update.sh rewrote an identical file (mtime $mtime_before → $mtime_after)"; exit 1; }
+          # Modified file must NOT be overwritten without --force.
+          tail -1 "$TMPHOME/.claude/hooks/format-on-edit.sh" | grep -q "user customisation" \
+            || { echo "::error::update.sh clobbered a customised file without --force"; exit 1; }
+
+      - name: update --merge writes <file>.new alongside
+        run: |
+          out=$(HOME="$TMPHOME" USER_PROJECT_KEY="-ci-test" SKILL_DIR="$SK" \
+                bash "$SK/scripts/update.sh" --merge 2>&1)
+          echo "$out"
+          [ -f "$TMPHOME/.claude/hooks/format-on-edit.sh.new" ] \
+            || { echo "::error::update --merge didn't write format-on-edit.sh.new"; exit 1; }
+          # Original is still customised.
+          tail -1 "$TMPHOME/.claude/hooks/format-on-edit.sh" | grep -q "user customisation" \
+            || { echo "::error::update --merge overwrote the original"; exit 1; }
 
       - name: ambiguous scope (no .claude ancestor) errors helpfully
         run: |

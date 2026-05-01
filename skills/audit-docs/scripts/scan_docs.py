@@ -47,16 +47,51 @@ SKIP_DIRS = {
     ".cache",
     "site-packages",
 }
+
+# Path-glob excludes applied against forward-slash relative paths.
+# Built-ins cover well-known framework runtime artefact locations.
+DEFAULT_EXCLUDE_GLOBS = (
+    "storage/app/runs/*",  # Laravel/Specify per-run agent workdirs
+    "storage/framework/*",  # Laravel runtime cache, sessions, views
+    "storage/logs/*",  # Laravel logs
+    "tmp/*",
+    "temp/*",
+)
 STALE_DAYS = 365
 NOW = time.time()
 
 
-def walk_files(root: Path) -> list[Path]:
+def is_excluded(rel: str, globs: tuple[str, ...]) -> bool:
+    """Check whether `rel` (a forward-slash relative path) matches any glob.
+
+    A glob matches if the file's relative path matches it directly, or if any
+    of its parent directories match it — so `storage/app/runs/*` excludes
+    everything under `storage/app/runs/`, not just direct children.
+    """
+    import fnmatch
+
+    for g in globs:
+        if fnmatch.fnmatchcase(rel, g):
+            return True
+        # match parent directories so `foo/*` excludes `foo/a/b/c`.
+        parts = rel.split("/")
+        for i in range(1, len(parts)):
+            prefix = "/".join(parts[:i]) + "/*"
+            if fnmatch.fnmatchcase(prefix, g):
+                return True
+    return False
+
+
+def walk_files(root: Path, exclude_globs: tuple[str, ...] = ()) -> list[Path]:
     out: list[Path] = []
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if d not in SKIP_DIRS and not d.startswith(".")]
         for f in filenames:
-            out.append(Path(dirpath) / f)
+            p = Path(dirpath) / f
+            rel = p.relative_to(root).as_posix()
+            if exclude_globs and is_excluded(rel, exclude_globs):
+                continue
+            out.append(p)
     return out
 
 
@@ -400,7 +435,7 @@ def _strip_trailing_php_attribute(head: str) -> str | None:
     return None
 
 
-def api_coverage(root: Path) -> dict[str, Any]:
+def api_coverage(root: Path, exclude_globs: tuple[str, ...] = ()) -> dict[str, Any]:
     out: dict[str, Any] = {
         "python": {"public_symbols": 0, "documented": 0, "missing": []},
         "typescript": {"exported_symbols": 0, "documented": 0, "missing": []},
@@ -413,6 +448,9 @@ def api_coverage(root: Path) -> dict[str, Any]:
             p = Path(dirpath) / f
             ext = p.suffix.lower()
             if ext not in CODE_EXTS:
+                continue
+            rel_posix = p.relative_to(root).as_posix()
+            if exclude_globs and is_excluded(rel_posix, exclude_globs):
                 continue
             try:
                 text = p.read_text(encoding="utf-8", errors="replace")
@@ -754,6 +792,23 @@ def main() -> int:
         action="store_true",
         help="HEAD-check external links (online; not yet implemented)",
     )
+    ap.add_argument(
+        "--exclude",
+        action="append",
+        default=[],
+        metavar="GLOB",
+        help=(
+            "Path glob to exclude from the scan (relative to --path, forward slashes). "
+            "Repeatable. Adds to built-in defaults (storage/app/runs/*, "
+            "storage/framework/*, storage/logs/*, tmp/*, temp/*). "
+            "Pass --no-default-excludes to drop the built-ins."
+        ),
+    )
+    ap.add_argument(
+        "--no-default-excludes",
+        action="store_true",
+        help="Don't apply the built-in exclude globs.",
+    )
     args = ap.parse_args()
 
     root = Path(args.path).resolve()
@@ -761,7 +816,11 @@ def main() -> int:
         print(json.dumps({"error": f"path not found or not a directory: {root}"}))
         return 1
 
-    all_files = walk_files(root)
+    excludes: tuple[str, ...] = tuple(
+        ([] if args.no_default_excludes else list(DEFAULT_EXCLUDE_GLOBS)) + list(args.exclude)
+    )
+
+    all_files = walk_files(root, excludes)
     md_files = [p for p in all_files if p.suffix.lower() in MD_EXTS]
 
     inventory = {
@@ -769,6 +828,7 @@ def main() -> int:
         "total_files_scanned": len(all_files),
         "markdown_files": len(md_files),
         "code_files": sum(1 for p in all_files if p.suffix.lower() in CODE_EXTS),
+        "exclude_globs": list(excludes),
     }
 
     report: dict[str, Any] = {
@@ -776,7 +836,7 @@ def main() -> int:
         "inventory": inventory,
         "hygiene": check_hygiene(root, md_files),
         "diataxis": diataxis_audit(root, md_files),
-        "api_coverage": api_coverage(root),
+        "api_coverage": api_coverage(root, excludes),
         "site": site_audit(root) if args.mode == "site" else {"present": False},
         "agent": agent_readiness(root, md_files),
     }

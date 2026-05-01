@@ -2,7 +2,7 @@
 
 A small opinionated skill that turns `~/.claude/` into a proper **harness**: feedforward guides Claude reads before it acts, deterministic sensors that catch drift after, and an optional drift-detection loop that PRs deltas against the latest releases each month.
 
-Sub-actions: **install**, **uninstall**, **update**, **doctor**, **snapshot**, **status**, **audit**. All idempotent. No surface gets clobbered without consent.
+Sub-actions: **install**, **uninstall**, **update**, **doctor**, **adopt**, **snapshot**, **status**, **audit**. All idempotent. No surface gets clobbered without consent.
 
 ## Where the idea comes from
 
@@ -34,6 +34,7 @@ This skill is also a sibling of [datashaman/harness-template](https://github.com
 | "uninstall harness", "remove the bootstrap"        | `uninstall`|
 | "update harness", "pull latest templates"          | `update`   |
 | "doctor", "diagnose my setup", "is it working?"    | `doctor`   |
+| "adopt harness", "retrofit into my project"        | `adopt`    |
 | "snapshot my setup", "back up `~/.claude/`"        | `snapshot` |
 | "what's installed?", "is the harness wired?"       | `status`   |
 | "schedule a monthly audit", "audit my setup"       | `audit`    |
@@ -99,6 +100,26 @@ Symmetric reversal. Conservative defaults:
 - Keeps `CLAUDE.md`, memory entries, and the env var by default — opt in with `--remove-claude-md`, `--remove-memory`, `--remove-env`, or `--all`.
 - Flags: `--dry-run`, `--force` (override content-match check).
 
+## What `adopt` does
+
+Retrofits the harness into an existing project that wasn't built around it. Walkthrough:
+
+1. **Detects state.** Reports what's already there — `CLAUDE.md`, `.claude/`, `settings.json`, `scripts/harness-check.sh` — plus stack signals from manifest files.
+2. **Writes a starter `scripts/harness-check.sh`** — the project-side pass/fail gate that `verify-before-stop.sh` and `/verify` invoke. Stack-aware: runs lint / types / tests for whichever ecosystem files are present (`package.json`, `composer.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `Gemfile`). Refuses to overwrite an existing one (`--force` to override). Empty-sensor case is treated as PASS so the script never strands `Stop`.
+3. **Prints the next-step install command.** Doesn't run install itself — you read the preflight banner there separately.
+
+```bash
+/harness adopt                # detect + drop starter + print next steps
+/harness install --scope=project   # then this — 4 hooks, /verify, /plan, CLAUDE.md
+# edit scripts/harness-check.sh to taste
+# restart Claude Code so hooks load
+/verify                       # smoke-test the gate
+```
+
+For a deeper project-scope harness (policy YAMLs, `harness/grades.yml`, `.skip` ledger, stack profiles), see [`datashaman/harness-template`](https://github.com/datashaman/harness-template). `adopt` gives you the spine; harness-template is the next floor up.
+
+Refuses to write into `$HOME` — adopt is project-scope only.
+
 ## What `update` does
 
 Refreshes installed files against the current templates without clobbering customisations. For each surface compares installed vs template via sha256:
@@ -155,9 +176,11 @@ None. The skill detects intent from natural language. If unclear, it runs `statu
 | `scripts/uninstall.sh`            | Symmetric uninstaller (content-match check; `--all` for full sweep)   |
 | `scripts/update.sh`               | Refresh installed files vs current templates (`--merge` / `--force`)  |
 | `scripts/doctor.sh`               | End-to-end diagnostic (perms, hook smoke-test, settings JSON, etc.)   |
+| `scripts/adopt.sh`                | Retrofit into an existing project — writes `scripts/harness-check.sh`|
 | `scripts/snapshot.sh`             | Sanitised mirror of `~/.claude/` → target git repo                    |
 | `scripts/status.sh`               | Read-only — reports installed / modified / missing per surface         |
 | `scripts/_detect_stack.py`        | Stack-signal detector — auto-fills `## Stack signals` at install time |
+| `assets/harness-check.sh.tmpl`    | Starter project pass/fail gate written by `adopt`                     |
 | `scripts/audit-prompt.md`         | Prompt template for the monthly remote-audit routine                  |
 
 ## Requirements

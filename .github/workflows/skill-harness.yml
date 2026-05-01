@@ -143,6 +143,31 @@ jobs:
           grep -q 'CLAUDE_PROJECT_DIR' "$PROJ/proj/.claude/settings.json" \
             || { echo "::error::project settings missing CLAUDE_PROJECT_DIR in hook commands"; exit 1; }
 
+      - name: adopt drops harness-check.sh starter and refuses $HOME
+        run: |
+          PROJ="$RUNNER_TEMP/adopt-test"
+          mkdir -p "$PROJ"
+          # Pretend it's a Node project so the detector emits something.
+          echo '{"scripts":{"lint:check":"echo lint","test":"echo test"}}' > "$PROJ/package.json"
+          out=$(SKILL_DIR="$SK" bash "$SK/scripts/adopt.sh" --target="$PROJ")
+          echo "$out"
+          test -x "$PROJ/scripts/harness-check.sh" \
+            || { echo "::error::adopt didn't write scripts/harness-check.sh"; exit 1; }
+          echo "$out" | grep -q "Stack signals" \
+            || { echo "::error::adopt preflight missing Stack signals section"; exit 1; }
+          # Re-running without --force keeps the existing file
+          echo "# user-edit" >> "$PROJ/scripts/harness-check.sh"
+          before=$(sha256sum "$PROJ/scripts/harness-check.sh" 2>/dev/null || shasum -a 256 "$PROJ/scripts/harness-check.sh" | awk '{print $1}')
+          SKILL_DIR="$SK" bash "$SK/scripts/adopt.sh" --target="$PROJ" > /dev/null
+          after=$(sha256sum "$PROJ/scripts/harness-check.sh" 2>/dev/null || shasum -a 256 "$PROJ/scripts/harness-check.sh" | awk '{print $1}')
+          [ "$before" = "$after" ] || { echo "::error::adopt overwrote a customised harness-check.sh without --force"; exit 1; }
+          # Refuse $HOME
+          rc=$(SKILL_DIR="$SK" bash "$SK/scripts/adopt.sh" --target="$HOME" >/dev/null 2>&1; echo $?)
+          [ "$rc" = "2" ] || { echo "::error::adopt should refuse \$HOME with exit 2"; exit 1; }
+          # Starter has at least one sensor wired by virtue of grep matching package.json
+          grep -q "step \"npm run lint:check\"" "$PROJ/scripts/harness-check.sh" \
+            || { echo "::error::starter harness-check.sh missing the npm lint:check block"; exit 1; }
+
       - name: ambiguous scope (no .claude ancestor) errors helpfully
         run: |
           out=$(SKILL_DIR="$PWD/skills/harness" bash skills/harness/scripts/install.sh 2>&1; echo "rc=$?")

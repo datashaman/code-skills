@@ -8,14 +8,17 @@ description: >
   protection for customised files); update (refresh installed files vs
   current templates, with --merge for diffable side-by-side); doctor
   (end-to-end diagnostic — sha256 tools, write perms, hook smoke-test,
-  settings JSON validity, memory + CLAUDE.md state); snapshot (sanitised
-  mirror of ~/.claude/ to a private git repo); status (report what's
-  installed, modified, or missing); audit (prepare a monthly remote-audit
-  routine that PRs deltas against the latest Anthropic releases and Claude
-  Code community patterns). All sub-actions are idempotent. Use when asked
-  to "set up my Claude Code", "install harness", "uninstall harness",
-  "update harness", "diagnose my setup", "snapshot my setup", "audit my
-  setup", "harden my Claude", or any request matching the sub-actions.
+  settings JSON validity, memory + CLAUDE.md state); adopt (retrofit into
+  an existing project — detects stack, scaffolds a starter scripts/harness-
+  check.sh, prints next-step install command); snapshot (sanitised mirror
+  of ~/.claude/ to a private git repo); status (report what's installed,
+  modified, or missing); audit (prepare a monthly remote-audit routine
+  that PRs deltas against the latest Anthropic releases and Claude Code
+  community patterns). All sub-actions are idempotent. Use when asked to
+  "set up my Claude Code", "install harness", "uninstall harness", "update
+  harness", "diagnose my setup", "adopt harness in this project",
+  "retrofit", "snapshot my setup", "audit my setup", "harden my Claude",
+  or any request matching the sub-actions.
 user-invocable: true
 ---
 
@@ -35,6 +38,7 @@ The user invokes this skill, optionally with an action word. Detect intent and r
 | "uninstall", "remove", "undo"                 | `uninstall` | `scripts/uninstall.sh`          |
 | "update", "pull latest templates", "refresh"  | `update`    | `scripts/update.sh`             |
 | "doctor", "diagnose", "is it working"         | `doctor`    | `scripts/doctor.sh`             |
+| "adopt", "add to existing project", "retrofit"| `adopt`     | `scripts/adopt.sh`              |
 | "snapshot", "backup", "mirror to git"         | `snapshot`  | `scripts/snapshot.sh`           |
 | "status", "what's installed", "audit local"   | `status`    | `scripts/status.sh`             |
 | "audit", "schedule audit", "monthly check"    | `audit`     | (prep work — see below)         |
@@ -122,6 +126,35 @@ Flags:
 The script prints a preflight banner showing scope, target, what will be removed vs kept, and which `--keep-*` / `--remove-*` flags are active. Always run `--dry-run` first if unsure.
 
 Tell the user to **restart Claude Code** so hook deregistration takes effect.
+
+## adopt
+
+Retrofit the harness into an existing project (project scope only). Use when the user says "I have a project, how do I add this?", "adopt", "retrofit", or any variant that implies *this isn't a greenfield install*.
+
+```bash
+bash "$SKILL_DIR/scripts/adopt.sh"
+```
+
+What it does:
+
+- Detects the project root (`$CLAUDE_PROJECT_DIR` or `$PWD`; refuses to write into `$HOME`).
+- Reports what's already there: `CLAUDE.md`, `.claude/`, `settings.json`, `scripts/harness-check.sh`, plus stack signals.
+- Writes a stack-aware starter file to `scripts/harness-check.sh` — the project-side pass/fail gate that `verify-before-stop.sh` and `/verify` invoke. The starter runs lint / types / tests for whichever ecosystem files are present (`package.json`, `composer.json`, `pyproject.toml`, `go.mod`, `Cargo.toml`, `Gemfile`). Skipped if `harness-check.sh` already exists (`--force` to overwrite). Empty-sensor case is treated as PASS so the script never strands `Stop`.
+- Prints the next-step `install.sh --scope=project` command. **Does not run install itself** — the user reviews the preflight banner there separately.
+
+Walk-through for the agent:
+
+1. Run `adopt.sh`. Read its preflight to the user.
+2. If the user is happy, run `install.sh --scope=project` (or with `--include=hooks,commands` for a minimum-viable retrofit that doesn't add a CLAUDE.md).
+3. Tell the user to edit `scripts/harness-check.sh` to match their project's commands (the starter is intentionally generous; comment out or delete blocks that don't apply).
+4. Tell them to **restart Claude Code** so hooks load.
+5. Suggest they run `/verify` once to smoke-test the gate end-to-end.
+6. Mention `datashaman/harness-template` for the deeper project-scope layer (policy YAMLs, grades, `.skip` ledger) when they've outgrown the starter.
+
+Flags:
+- `--target=PATH` — explicit project root.
+- `--dry-run` — show plan, don't write.
+- `--force` — overwrite an existing `scripts/harness-check.sh` (you'll lose edits).
 
 ## update
 
@@ -235,7 +268,9 @@ The remote agent clones the snapshot repo, researches the last ~30 days of Anthr
 | `scripts/uninstall.sh`            | Symmetric uninstaller (content-match check; `--all` for full sweep)   |
 | `scripts/update.sh`               | Refresh installed files vs current templates (`--merge` / `--force`)  |
 | `scripts/doctor.sh`               | End-to-end diagnostic (perms, hook smoke-test, settings JSON, etc.)   |
+| `scripts/adopt.sh`                | Retrofit into existing project — writes `scripts/harness-check.sh`    |
 | `scripts/snapshot.sh`             | Sanitised mirror of `~/.claude/` → target git repo                    |
 | `scripts/status.sh`               | Read-only — reports installed / modified / missing per surface         |
 | `scripts/_detect_stack.py`        | Stack-signal detector — auto-fills `## Stack signals` at install time |
+| `assets/harness-check.sh.tmpl`    | Starter project pass/fail gate written by `adopt`                     |
 | `scripts/audit-prompt.md`         | Prompt template for the monthly remote-audit routine                  |

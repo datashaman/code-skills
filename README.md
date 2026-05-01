@@ -106,11 +106,11 @@ Trello board health audit. Queries five dimensions of card data to identify thro
 
 ### `/harness`
 
-Control surface for a harness-engineering Claude Code setup at user or project scope. Sub-actions: **install** (operating-contract CLAUDE.md, four guardrail hooks, `/verify` and `/plan` slash commands, auto-memory seeds, settings.json patch); **uninstall** (symmetric reversal with content-match protection for customised files); **update** (refresh installed files vs current templates with diffable `--merge` mode); **doctor** (end-to-end diagnostic — perms, hook smoke-test, settings JSON validity); **snapshot** (sanitised mirror of `~/.claude/` to a private git repo); **status** (report installed / modified / missing per surface); **audit** (prepare a monthly remote routine that PRs deltas against the latest Anthropic releases and Claude Code community patterns). All idempotent.
+Control surface for a harness-engineering Claude Code setup at user or project scope. Sub-actions: **install** (operating-contract CLAUDE.md, four guardrail hooks, `/verify` and `/plan` slash commands, auto-memory seeds, settings.json patch); **uninstall** (symmetric reversal with content-match protection for customised files); **update** (refresh installed files vs current templates with diffable `--merge` mode); **doctor** (end-to-end diagnostic — perms, hook smoke-test, settings JSON validity); **adopt** (retrofit into an existing project — detects stack, writes a starter `scripts/harness-check.sh` pass/fail gate, prints next-step install command); **snapshot** (sanitised mirror of `~/.claude/` to a private git repo); **status** (report installed / modified / missing per surface); **audit** (prepare a monthly remote routine that PRs deltas against the latest Anthropic releases and Claude Code community patterns). All idempotent.
 
 Builds on [OpenAI's harness-engineering article](https://openai.com/index/harness-engineering/), [Martin Fowler's writeup](https://martinfowler.com/articles/harness-engineering.html), and patterns from Boris Cherny, Simon Willison, Jesse Vincent (Superpowers), Geoffrey Huntley, Hamel Husain, and Steve Yegge. Sibling to [datashaman/harness-template](https://github.com/datashaman/harness-template) (the project-scope counterpart).
 
-**Arguments:** None — the skill detects intent from natural language ("install", "uninstall", "update", "doctor", "snapshot", "status", "audit"). Just `/harness` runs `status`.
+**Arguments:** None — the skill detects intent from natural language ("install", "uninstall", "update", "doctor", "adopt", "snapshot", "status", "audit"). Just `/harness` runs `status`.
 
 **Usage:**
 ```
@@ -120,6 +120,7 @@ Builds on [OpenAI's harness-engineering article](https://openai.com/index/harnes
 /harness uninstall --all    # also remove CLAUDE.md, memory, env var
 /harness update             # refresh files; --merge for diffable side-by-side
 /harness doctor             # end-to-end diagnostic
+/harness adopt              # retrofit into existing project (scaffolds scripts/harness-check.sh)
 /harness snapshot
 /harness status
 /harness audit              # prep a monthly remote routine

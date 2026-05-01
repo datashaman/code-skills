@@ -97,9 +97,10 @@ None. The skill detects intent from natural language. If unclear, it runs `statu
 
 ## Requirements
 
-- macOS or Linux with `python3` and `grep -E` on PATH (both are stdlib / coreutils — should be everywhere)
-- For `snapshot`: `git`, plus `gh` if you want help creating a private repo
-- For `audit`: a Claude Code account where `/schedule` is available
+- macOS or Linux with `python3` and `grep -E` on PATH (both standard).
+- A SHA-256 tool for `uninstall`/`status` content-match: any one of `sha256sum` (default on Linux), `shasum` (default on macOS), or `python3` (already required, so this is automatic).
+- For `snapshot`: `git`, plus `gh` if you want help creating a private repo.
+- For `audit`: a Claude Code account where `/schedule` is available.
 
 ## Install via `skills.sh`
 

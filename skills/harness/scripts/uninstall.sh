@@ -30,7 +30,7 @@ for arg in "$@"; do
     --remove-env) REMOVE_ENV=1 ;;
     --all) FORCE=1; REMOVE_MEMORY=1; REMOVE_CLAUDE_MD=1; REMOVE_ENV=1 ;;
     -h|--help)
-      sed -n '2,17p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'
+      sed -n '2,16p' "${BASH_SOURCE[0]}" | sed 's/^# \?//'
       exit 0 ;;
     *) echo "unknown flag: $arg" >&2; exit 2 ;;
   esac
@@ -38,7 +38,7 @@ done
 
 SKILL_DIR="${SKILL_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 ASSETS="$SKILL_DIR/assets"
-HOME_CLAUDE="${HOME_CLAUDE:-$HOME/.claude}"
+HOME_CLAUDE="$HOME/.claude"
 USER_PROJECT_KEY="${USER_PROJECT_KEY:-$(printf '%s' "$HOME" | tr '/' '-')}"
 MEMORY_DIR="$HOME_CLAUDE/projects/$USER_PROJECT_KEY/memory"
 
@@ -46,12 +46,27 @@ MEMORY_DIR="$HOME_CLAUDE/projects/$USER_PROJECT_KEY/memory"
 
 say() { echo "→ $*"; }
 
-# sha256_eq <fileA> <fileB> — true if contents match.
+# sha256 <file> — print sha256 hex digest. Tries sha256sum, shasum, then python3
+# fallback. Returns non-zero if no hashing tool is available.
+sha256() {
+  local f="$1"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$f" | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$f" | awk '{print $1}'
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$f"
+  else
+    return 1
+  fi
+}
+
+# sha256_eq <fileA> <fileB> — true iff both exist, both can be hashed, and hashes match.
 sha256_eq() {
   [ -f "$1" ] && [ -f "$2" ] || return 1
   local a b
-  a="$(shasum -a 256 < "$1" | awk '{print $1}')"
-  b="$(shasum -a 256 < "$2" | awk '{print $1}')"
+  a="$(sha256 "$1")" || return 1
+  b="$(sha256 "$2")" || return 1
   [ "$a" = "$b" ]
 }
 
@@ -117,14 +132,16 @@ else
   if [ $DRY -eq 1 ]; then
     echo "  [dry-run] would strip 4 hook entries$([ $REMOVE_ENV -eq 1 ] && echo ' + env var')"
   else
-    REMOVE_ENV=$REMOVE_ENV python3 - <<PY
+    SETTINGS="$SETTINGS" REMOVE_ENV="$REMOVE_ENV" python3 - <<'PY'
 import json, os
-p = os.path.expanduser("$SETTINGS")
+p = os.environ["SETTINGS"]
 with open(p) as f:
     s = json.load(f)
 
 removed = []
 
+# settings.json stores the literal "~/.claude/..." form (Claude Code expands
+# ~ at hook-execution time), so we match against that exact string.
 OUR_CMDS = {
     "PreToolUse":  "~/.claude/hooks/block-force-push.sh",
     "PostToolUse": "~/.claude/hooks/format-on-edit.sh",
@@ -177,7 +194,11 @@ fi
 say "tidying empty dirs"
 for d in "$HOME_CLAUDE/hooks" "$HOME_CLAUDE/commands" "$HOME_CLAUDE/agents"; do
   if [ -d "$d" ] && [ -z "$(ls -A "$d" 2>/dev/null)" ]; then
-    [ $DRY -eq 1 ] && echo "  [dry-run] would rmdir $d" || { rmdir "$d" 2>/dev/null && echo "  rmdir $d"; }
+    if [ $DRY -eq 1 ]; then
+      echo "  [dry-run] would rmdir $d"
+    else
+      rmdir "$d" 2>/dev/null && echo "  rmdir $d"
+    fi
   fi
 done
 

@@ -4,13 +4,16 @@
 # unless --force is passed. Patches settings.json to wire up hooks.
 #
 # Usage:
-#   bash install.sh                    # interactive, never clobber
+#   bash install.sh                    # non-interactive; never clobber existing files
 #   bash install.sh --force            # overwrite existing hooks/commands/CLAUDE.md
 #   bash install.sh --dry-run          # show what would be done
 #   bash install.sh --skip-memory      # leave memory/ alone (recommended if already populated)
 #   bash install.sh --skip-settings    # leave settings.json alone
 #
 # Reads SKILL_DIR from env if set, otherwise computes from script location.
+# To install against a different home, set HOME=/some/path before invoking — the
+# script derives every path from $HOME for consistency between filesystem layout
+# and the paths written into settings.json.
 
 set -euo pipefail
 
@@ -30,18 +33,34 @@ done
 
 SKILL_DIR="${SKILL_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 ASSETS="$SKILL_DIR/assets"
-HOME_CLAUDE="${HOME_CLAUDE:-$HOME/.claude}"
+HOME_CLAUDE="$HOME/.claude"
 USER_PROJECT_KEY="${USER_PROJECT_KEY:-$(printf '%s' "$HOME" | tr '/' '-')}"  # e.g. -Users-marlinf
 MEMORY_DIR="$HOME_CLAUDE/projects/$USER_PROJECT_KEY/memory"
 
 [ -d "$ASSETS" ] || { echo "error: $ASSETS not found" >&2; exit 1; }
 
 say() { echo "→ $*"; }
-do_or_dry() { if [ $DRY -eq 1 ]; then echo "  [dry-run] $*"; else eval "$@"; fi; }
+
+# do_or_dry — execute the given argv directly (no eval), or in dry-run mode
+# print a shell-quoted preview using printf %q.
+do_or_dry() {
+  if [ $DRY -eq 1 ]; then
+    local arg
+    printf '  [dry-run]'
+    for arg in "$@"; do printf ' %q' "$arg"; done
+    printf '\n'
+  else
+    "$@"
+  fi
+}
 
 # 1. Ensure target dirs.
 say "ensuring directories"
-do_or_dry "mkdir -p '$HOME_CLAUDE/hooks' '$HOME_CLAUDE/commands' '$HOME_CLAUDE/agents' '$MEMORY_DIR'"
+do_or_dry mkdir -p \
+  "$HOME_CLAUDE/hooks" \
+  "$HOME_CLAUDE/commands" \
+  "$HOME_CLAUDE/agents" \
+  "$MEMORY_DIR"
 
 # Helper: copy with overwrite policy.
 copy_safe() {
@@ -67,7 +86,7 @@ say "installing hooks"
 for f in "$ASSETS/hooks/"*.sh; do
   name="$(basename "$f")"
   copy_safe "$f" "$HOME_CLAUDE/hooks/$name"
-  do_or_dry "chmod +x '$HOME_CLAUDE/hooks/$name'"
+  do_or_dry chmod +x "$HOME_CLAUDE/hooks/$name"
 done
 
 # 4. Commands.
@@ -95,22 +114,39 @@ else
   say "patching settings.json"
   SETTINGS="$HOME_CLAUDE/settings.json"
   if [ ! -f "$SETTINGS" ]; then
-    do_or_dry "echo '{}' > '$SETTINGS'"
+    if [ $DRY -eq 1 ]; then
+      echo "  [dry-run] would create empty $SETTINGS"
+    else
+      printf '{}\n' > "$SETTINGS"
+    fi
   fi
   if [ $DRY -eq 0 ]; then
-    python3 - <<PY
+    SETTINGS="$SETTINGS" python3 - <<'PY'
 import json, os
-p = os.path.expanduser("$SETTINGS")
+p = os.environ["SETTINGS"]
 with open(p) as f:
     s = json.load(f)
 
-s.setdefault("env", {})
-s["env"].setdefault("CLAUDE_CODE_AUTO_COMPACT_WINDOW", "400000")
+changed = False
 
-s.setdefault("hooks", {})
+env = s.setdefault("env", {})
+if env.get("CLAUDE_CODE_AUTO_COMPACT_WINDOW") != "400000":
+    env["CLAUDE_CODE_AUTO_COMPACT_WINDOW"] = "400000"
+    changed = True
+
+hooks = s.setdefault("hooks", {})
+
+# settings.json gets the literal "~/.claude/..." form. Claude Code expands ~
+# at hook-execution time, so this stays portable across machines / users.
+OUR_HOOKS = [
+    ("PreToolUse",  "Bash",       "~/.claude/hooks/block-force-push.sh"),
+    ("PostToolUse", "Write|Edit", "~/.claude/hooks/format-on-edit.sh"),
+    ("PostCompact",  None,        "~/.claude/hooks/post-compact-reinject.sh"),
+    ("Stop",         None,        "~/.claude/hooks/verify-before-stop.sh"),
+]
 
 def ensure_hook(event, matcher, cmd):
-    blocks = s["hooks"].setdefault(event, [])
+    blocks = hooks.setdefault(event, [])
     for b in blocks:
         if b.get("matcher") == matcher:
             for h in b.get("hooks", []):
@@ -124,11 +160,9 @@ def ensure_hook(event, matcher, cmd):
     blocks.append(block)
     return True
 
-changed = False
-changed |= ensure_hook("PreToolUse",  "Bash",       "~/.claude/hooks/block-force-push.sh")
-changed |= ensure_hook("PostToolUse", "Write|Edit", "~/.claude/hooks/format-on-edit.sh")
-changed |= ensure_hook("PostCompact",  None,        "~/.claude/hooks/post-compact-reinject.sh")
-changed |= ensure_hook("Stop",         None,        "~/.claude/hooks/verify-before-stop.sh")
+for event, matcher, cmd in OUR_HOOKS:
+    if ensure_hook(event, matcher, cmd):
+        changed = True
 
 with open(p, "w") as f:
     json.dump(s, f, indent=2)
@@ -139,9 +173,6 @@ PY
     echo "  [dry-run] would patch $SETTINGS with env + 4 hooks"
   fi
 fi
-
-# (MEMORY.md is installed in step 5 alongside the other memory templates;
-#  no separate bootstrap step needed.)
 
 echo
 say "done"

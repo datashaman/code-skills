@@ -6,7 +6,7 @@ set -u
 
 SKILL_DIR="${SKILL_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 ASSETS="$SKILL_DIR/assets"
-HOME_CLAUDE="${HOME_CLAUDE:-$HOME/.claude}"
+HOME_CLAUDE="$HOME/.claude"
 USER_PROJECT_KEY="${USER_PROJECT_KEY:-$(printf '%s' "$HOME" | tr '/' '-')}"
 MEMORY_DIR="$HOME_CLAUDE/projects/$USER_PROJECT_KEY/memory"
 
@@ -25,27 +25,47 @@ if ! [ -t 1 ]; then
   dim() { printf '%s' "$1"; }
 fi
 
-sha() { shasum -a 256 < "$1" 2>/dev/null | awk '{print $1}'; }
+# Portable sha256: prefer sha256sum (Linux), then shasum (macOS), then python3.
+# Returns non-zero if no hashing tool is available — callers must check.
+sha() {
+  local f="$1"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$f" 2>/dev/null | awk '{print $1}'
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$f" 2>/dev/null | awk '{print $1}'
+  elif command -v python3 >/dev/null 2>&1; then
+    python3 -c 'import hashlib,sys; print(hashlib.sha256(open(sys.argv[1],"rb").read()).hexdigest())' "$f" 2>/dev/null
+  else
+    return 1
+  fi
+}
+
+# Pad the *uncoloured* label to width 12, then colour it.
+fmt_label() { printf '%s' "$(printf '%-12s' "$1")" | awk -v c="$2" '{print c$0}' ; }
 
 report() {
   local installed="$1" template="$2" label="$3"
   local lhs rhs status
   if [ ! -e "$installed" ]; then
-    status="$(red missing)"
+    status="$(red missing)    "
   elif [ -f "$template" ]; then
-    lhs="$(sha "$installed")"; rhs="$(sha "$template")"
-    if [ "$lhs" = "$rhs" ]; then
-      status="$(green installed)"
+    if lhs="$(sha "$installed")" && [ -n "$lhs" ] \
+       && rhs="$(sha "$template")" && [ -n "$rhs" ]; then
+      if [ "$lhs" = "$rhs" ]; then
+        status="$(green installed)  "
+      else
+        status="$(yellow modified)   "
+      fi
     else
-      status="$(yellow modified)"
+      status="$(red 'cannot hash') "
     fi
   else
-    status="$(green present)"  # no template to compare against
+    status="$(green present)    "
   fi
-  printf '  %-12s %s  %s\n' "$status" "$label" "$(dim "$installed")"
+  printf '  %s %s  %s\n' "$status" "$label" "$(dim "$installed")"
 }
 
-echo "harness status — \$HOME_CLAUDE = $HOME_CLAUDE"
+echo "harness status — HOME = $HOME"
 echo
 
 echo "CLAUDE.md"
@@ -76,16 +96,17 @@ echo
 echo "settings.json"
 SETTINGS="$HOME_CLAUDE/settings.json"
 if [ ! -f "$SETTINGS" ]; then
-  printf '  %-12s no settings.json\n' "$(red missing)"
+  printf '  %s no settings.json\n' "$(red 'missing     ')"
 else
-  python3 - <<PY
-import json, sys
-import os
+  SETTINGS="$SETTINGS" python3 - <<'PY'
+import json, sys, os
 
-p = os.path.expanduser("$SETTINGS")
+p = os.environ["SETTINGS"]
 with open(p) as f:
     s = json.load(f)
 
+# settings.json stores "~/.claude/..." literally; that's what install.sh writes
+# and what Claude Code expands at hook-execution time.
 OUR_CMDS = {
     "PreToolUse":  "~/.claude/hooks/block-force-push.sh",
     "PostToolUse": "~/.claude/hooks/format-on-edit.sh",
@@ -98,10 +119,9 @@ def green(s): return f"\033[32m{s}\033[0m" if is_tty else s
 def red(s):   return f"\033[31m{s}\033[0m" if is_tty else s
 def dim(s):   return f"\033[90m{s}\033[0m" if is_tty else s
 
-# Pad the *uncoloured* label to 12 chars, then colour the label.
+# Pad uncoloured label to width 12, then colour.
 def fmt(label, colour):
-    pad = max(0, 12 - len(label))
-    return colour(label) + (" " * pad)
+    return colour(label) + (" " * max(0, 12 - len(label)))
 
 hooks = s.get("hooks", {})
 for event, cmd in OUR_CMDS.items():

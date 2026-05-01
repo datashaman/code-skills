@@ -22,7 +22,9 @@ Three stages:
 
 1. **Bootstrap** (`scripts/install.sh`) — copies templates from `assets/` into `~/.claude/`, never overwrites without `--force`. Patches `settings.json` to wire hooks. `--dry-run` shows what would happen.
 2. **Snapshot** (`scripts/snapshot.sh`, optional) — mirrors `~/.claude/` into a private git repo, scrubs caches and secret patterns, commits + pushes only on diff. Run after material config changes.
-3. **Audit** (optional) — schedule a monthly remote routine using the prompt at `scripts/audit-prompt.md`. The agent clones your snapshot repo, researches the last ~30 days of Anthropic releases and canonical Claude Code voices (Cherny / Willison / Vincent / Huntley / Husain / Yegge), and PRs `audits/YYYY-MM-DD-setup-audit.md` with prioritised deltas.
+3. **Audit** (optional) — schedule a monthly remote routine using the prompt at `scripts/audit-prompt.md`.
+
+4. **Uninstall** (`scripts/uninstall.sh`) — symmetric reversal. Removes the 4 hooks, 2 commands, and the 4 hook entries from `settings.json`, but only for files that still match the installed template (so any customisation you made is kept). Pass `--remove-memory`, `--remove-claude-md`, `--remove-env`, or `--all` to broaden the sweep. `--dry-run` shows what would happen. The agent clones your snapshot repo, researches the last ~30 days of Anthropic releases and canonical Claude Code voices (Cherny / Willison / Vincent / Huntley / Husain / Yegge), and PRs `audits/YYYY-MM-DD-setup-audit.md` with prioritised deltas.
 
 The hooks:
 - **block-force-push.sh** (PreToolUse:Bash) — segment-aware matcher. Blocks force-push to main/master, hard reset to remote, `rm -rf ~`, `--no-verify`, world-writable chmod, branch -D. Allows `--force-with-lease`. Doesn't false-trigger on echoed strings.
@@ -45,6 +47,7 @@ None. The skill detects what's already in `~/.claude/`, reports gaps, runs the i
 | `assets/commands/*.md`            | `/verify`, `/plan`                                                    |
 | `assets/memory/*.tmpl`            | MEMORY.md index + 3 feedback memories + user_role template            |
 | `scripts/install.sh`              | Idempotent installer (`--dry-run` / `--force` / `--skip-memory` / `--skip-settings`) |
+| `scripts/uninstall.sh`            | Symmetric uninstaller — content-match check keeps user-modified files; `--all` for full sweep |
 | `scripts/snapshot.sh`             | Sanitised mirror of `~/.claude/` → target git repo                    |
 | `scripts/audit-prompt.md`         | Prompt template for the monthly remote-audit routine                  |
 

@@ -107,6 +107,23 @@ If the user wants version-controlled config + a monthly audit:
 
 4. **Tell the user to re-run `snapshot.sh`** whenever they materially change `~/.claude/`. Or schedule it locally via `/loop` or a launchd plist.
 
+## Uninstall
+
+If the user asks to remove the harness ("uninstall", "remove the harness", "undo bootstrap-harness"), run:
+
+```bash
+bash "$SKILL_DIR/scripts/uninstall.sh"
+```
+
+The uninstaller is symmetric and conservative:
+
+- Removes the 4 hooks and 2 slash commands **only if their content still matches the installed template** (sha256 compare against `assets/`). User-modified files are kept and reported as `keep (modified)`.
+- Strips the 4 hook entries from `settings.json`. Drops empty hook event arrays. Leaves all other settings (permissions, marketplaces, statusLine, etc.) untouched.
+- **Keeps by default:** `CLAUDE.md`, memory files, the `CLAUDE_CODE_AUTO_COMPACT_WINDOW` env var. Those tend to be customised. Pass `--remove-claude-md`, `--remove-memory`, `--remove-env` to opt in.
+- Flags: `--dry-run`, `--force` (override content-match check), `--all` (= `--force --remove-claude-md --remove-memory --remove-env`).
+
+After uninstall, tell the user to **restart Claude Code** so the hook deregistration takes effect.
+
 ## Step 5: Verify the install
 
 ```bash
@@ -142,5 +159,6 @@ Tell the user to **restart Claude Code (or open a new session)** — hooks load 
 | `assets/commands/*.md`            | `/verify`, `/plan` slash commands                                     |
 | `assets/memory/*.tmpl`            | MEMORY.md index + 3 feedback memories + user_role template            |
 | `scripts/install.sh`              | Idempotent installer with `--dry-run` / `--force` / `--skip-*` flags  |
+| `scripts/uninstall.sh`            | Symmetric uninstaller; content-match check keeps user-modified files; `--all` for full sweep |
 | `scripts/snapshot.sh`             | Sanitised mirror of `~/.claude/` → target git repo                    |
 | `scripts/audit-prompt.md`         | Prompt template for the monthly remote-audit routine                  |

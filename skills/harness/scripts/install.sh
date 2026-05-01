@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Idempotent installer for the bootstrap-harness skill.
+# Idempotent installer for the harness skill.
 # Copies templates from $SKILL_DIR/assets/ into ~/.claude/, never clobbers existing files
 # unless --force is passed. Patches settings.json to wire up hooks.
 #
@@ -151,4 +151,4 @@ echo "  1. Edit $HOME_CLAUDE/CLAUDE.md — fill in the 'Stack signals' section."
 echo "  2. Edit $MEMORY_DIR/user_role.md — replace placeholders with your actual context."
 echo "  3. Restart Claude Code (or open a new session) — hooks load on session start."
 echo "  4. Optional: run scripts/snapshot.sh to mirror this setup into a private git repo"
-echo "     and use scripts/audit-routine.json to schedule a monthly remote audit."
+echo "     and use scripts/audit-prompt.md to schedule a monthly remote audit."

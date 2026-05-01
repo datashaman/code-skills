@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Uninstaller for the bootstrap-harness skill.
+# Uninstaller for the harness skill.
 # Conservative by default: only removes files whose content still matches the
 # installed template (sha256 compare against $SKILL_DIR/assets/). User-modified
 # files are kept. CLAUDE.md, memory entries, and the env var are kept unless

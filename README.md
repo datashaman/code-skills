@@ -104,15 +104,23 @@ Trello board health audit. Queries five dimensions of card data to identify thro
 /audit-trello board="My Board" since=2024-07-01
 ```
 
-### `/bootstrap-harness`
+### `/harness`
 
-Bootstraps a "harness-engineering" Claude Code setup at user scope (`~/.claude/`): dense operating-contract CLAUDE.md, four deterministic guardrail hooks (block force-push, format on edit, re-inject CLAUDE.md after compact, refuse to stop with broken build), `/verify` and `/plan` slash commands, an auto-memory seed (concise / plan-first / verification-gate feedback memories + a user_role template), and an optional monthly remote-audit pipeline (snapshot the setup to a private git repo, schedule a routine that PRs deltas against the latest Anthropic releases and Claude Code community patterns). Idempotent installer with `--dry-run` / `--force` / `--skip-memory` / `--skip-settings`; never clobbers existing files unless asked. Ships with a symmetric `uninstall.sh` (content-match check keeps user-modified files; `--all` for full sweep).
+Control surface for a harness-engineering Claude Code setup at user scope (`~/.claude/`). Sub-actions: **install** (operating-contract CLAUDE.md, four guardrail hooks, `/verify` and `/plan` slash commands, auto-memory seeds, settings.json patch); **uninstall** (symmetric reversal with content-match protection for customised files); **snapshot** (sanitised mirror of `~/.claude/` to a private git repo); **status** (report installed / modified / missing per surface); **audit** (prepare a monthly remote routine that PRs deltas against the latest Anthropic releases and Claude Code community patterns). All idempotent.
 
-**Arguments:** None.
+Builds on [OpenAI's harness-engineering article](https://openai.com/index/harness-engineering/), [Martin Fowler's writeup](https://martinfowler.com/articles/harness-engineering.html), and patterns from Boris Cherny, Simon Willison, Jesse Vincent (Superpowers), Geoffrey Huntley, Hamel Husain, and Steve Yegge. Sibling to [datashaman/harness-template](https://github.com/datashaman/harness-template) (the project-scope counterpart).
+
+**Arguments:** None — the skill detects intent from natural language ("install", "uninstall", "snapshot", "status", "audit"). Just `/harness` runs `status`.
 
 **Usage:**
 ```
-/bootstrap-harness
+/harness                    # status, then ask
+/harness install
+/harness uninstall
+/harness uninstall --all    # also remove CLAUDE.md, memory, env var
+/harness snapshot
+/harness status
+/harness audit              # prep a monthly remote routine
 ```
 
 ## Other skills I like

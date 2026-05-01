@@ -1,0 +1,152 @@
+---
+name: harness
+description: >
+  Control surface for a "harness-engineering" Claude Code setup at user scope
+  (~/.claude/). Sub-actions: install (operating-contract CLAUDE.md, four
+  guardrail hooks, /verify and /plan slash commands, auto-memory seeds,
+  settings.json patch); uninstall (symmetric reversal with content-match
+  protection for customised files); snapshot (sanitised mirror of ~/.claude/
+  to a private git repo); status (report what's installed, modified, or
+  missing); audit (prepare a monthly remote-audit routine that PRs deltas
+  against the latest Anthropic releases and Claude Code community patterns).
+  All sub-actions are idempotent. Use when asked to "set up my Claude Code",
+  "install harness", "uninstall harness", "snapshot my setup", "audit my
+  setup", "harden my Claude", or any request matching the sub-actions.
+user-invocable: true
+---
+
+# Harness
+
+Control surface for the user-scope Claude Code "harness" — feedforward guides (CLAUDE.md, memory), feedback sensors (hooks), and an optional drift-detection loop (snapshot + monthly audit).
+
+The vocabulary follows OpenAI's *Harness engineering* (https://openai.com/index/harness-engineering/) and Martin Fowler's writeup (https://martinfowler.com/articles/harness-engineering.html). Day-to-day patterns are convergent picks from Boris Cherny, Simon Willison, Jesse Vincent (Superpowers), Geoffrey Huntley (Ralph loop), Hamel Husain (eval skills), and Steve Yegge (Gas Town). See README.md for citations.
+
+## Sub-action dispatch
+
+The user invokes this skill, optionally with an action word. Detect intent and run the matching sub-action. If the user says `/harness` without context, run **status** first (it's read-only and informative), then ask which action they want.
+
+| Said by user                                 | Sub-action  | Script                          |
+| -------------------------------------------- | ----------- | ------------------------------- |
+| "install", "set up", "bootstrap"             | `install`   | `scripts/install.sh`            |
+| "uninstall", "remove", "undo"                | `uninstall` | `scripts/uninstall.sh`          |
+| "snapshot", "backup", "mirror to git"        | `snapshot`  | `scripts/snapshot.sh`           |
+| "status", "what's installed", "audit local"  | `status`    | `scripts/status.sh`             |
+| "audit", "schedule audit", "monthly check"   | `audit`     | (prep work — see below)         |
+
+Substitute the skill's absolute base directory for `$SKILL_DIR` in every command — it's announced at the top of this invocation.
+
+## install
+
+Lays down the harness in `~/.claude/`:
+
+| Surface                  | What lands                                                                                          |
+| ------------------------ | --------------------------------------------------------------------------------------------------- |
+| `~/.claude/CLAUDE.md`    | Operating contract template (default stance, editing rules, expected tools, stack-signals placeholder) |
+| `~/.claude/hooks/`       | `block-force-push.sh`, `format-on-edit.sh`, `post-compact-reinject.sh`, `verify-before-stop.sh`     |
+| `~/.claude/commands/`    | `/verify`, `/plan`                                                                                  |
+| `~/.claude/projects/<slug>/memory/` | `MEMORY.md` index + `user_role`, `feedback_concise`, `feedback_plan_first`, `feedback_verification` |
+| `~/.claude/settings.json`| Adds `CLAUDE_CODE_AUTO_COMPACT_WINDOW=400000` env + 4 hook entries — only if missing                |
+
+```bash
+bash "$SKILL_DIR/scripts/install.sh"
+```
+
+Flags: `--dry-run`, `--force` (overwrite existing files), `--skip-memory`, `--skip-settings`.
+
+After install, walk the user through two hand-edits:
+
+1. `~/.claude/CLAUDE.md` — fill in the `## Stack signals` section. Look at `~/.claude/projects/` slugs and `installed_plugins.json` for hints; ask if unclear. **Don't auto-fill from guesswork.**
+2. `~/.claude/projects/<slug>/memory/user_role.md` — replace placeholders with the user's actual role/projects/stack. **Ask, don't invent.**
+
+Tell them to **restart Claude Code** so hooks load.
+
+## uninstall
+
+```bash
+bash "$SKILL_DIR/scripts/uninstall.sh"
+```
+
+Symmetric reversal. Conservative defaults:
+
+- Removes hooks + commands **only if their sha256 still matches** the installed template. User-modified files are kept and reported as `keep (modified)`.
+- Strips the 4 hook entries from `settings.json` and drops empty hook event arrays. Leaves all other settings untouched.
+- **Keeps by default:** `CLAUDE.md`, memory files, the `CLAUDE_CODE_AUTO_COMPACT_WINDOW` env var.
+
+Flags: `--dry-run`, `--force` (skip content-match), `--remove-claude-md`, `--remove-memory`, `--remove-env`, `--all` (= `--force` + the three `--remove-*`).
+
+Tell the user to **restart Claude Code** so hook deregistration takes effect.
+
+## snapshot
+
+```bash
+SNAPSHOT_REPO=~/Projects/<them>/<repo> bash "$SKILL_DIR/scripts/snapshot.sh"
+```
+
+Mirrors `~/.claude/` into a target git repo, scrubs caches and secret patterns, commits + pushes only on diff. Idempotent.
+
+If the user doesn't have a snapshot repo yet, prompt them to create one (PRIVATE — the snapshot has personal config):
+
+```bash
+mkdir -p ~/Projects/<them>/claude-setup
+cd ~/Projects/<them>/claude-setup
+git init -b main
+gh repo create <them>/claude-setup --private --source=. --remote=origin
+```
+
+Then run `snapshot.sh` against it. The first push lands; subsequent runs are no-ops if nothing changed.
+
+Override sources via env: `CLAUDE_DIR=...`, `USER_PROJECT_KEY=...`.
+
+## status
+
+```bash
+bash "$SKILL_DIR/scripts/status.sh"
+```
+
+Read-only. Reports:
+
+- For each hook + command + memory file + CLAUDE.md: `installed` (matches template), `modified` (customised), or `missing`.
+- For `settings.json`: which of the 4 hook entries are wired, plus the env var.
+- For snapshot repo (if `SNAPSHOT_REPO` env is set): commits ahead of origin, last snapshot timestamp.
+
+Use `status` first when the user says `/harness` without an action word, when they say "what's installed?", when they say "is this still set up?", or before any `install` to show the diff.
+
+## audit
+
+The audit is a monthly **remote** routine — Claude Code's `/schedule` skill creates it. This skill prepares the prompt and suggests config; the user runs `/schedule` themselves.
+
+Steps:
+
+1. Read `$SKILL_DIR/scripts/audit-prompt.md` — that's the prompt for the remote agent. Confirm with the user that it covers what they want.
+2. Suggested config:
+   - cron: `0 6 1 * *` (1st of month, 06:00 UTC)
+   - model: `claude-opus-4-7` (audit quality matters)
+   - tools: Bash, Read, Write, Edit, Glob, Grep, WebFetch, WebSearch, Agent
+   - sources: the user's snapshot repo URL (must exist — run `snapshot` first)
+3. Tell the user to invoke `/schedule` and paste the prompt + config. Or, if they have `RemoteTrigger` available in their session, build the body and call it directly.
+
+The remote agent clones the snapshot repo, researches the last ~30 days of Anthropic releases and canonical Claude Code voices, and PRs `audits/YYYY-MM-DD-setup-audit.md` with prioritised deltas. It never modifies tracked files outside `audits/`.
+
+## Constraints
+
+- **Never auto-fill stack signals or user_role.** Templates have placeholders; ask the user to fill them.
+- **Never modify `settings.json` outside `env` and `hooks`.** Don't touch permissions, marketplaces, statusLine, advisorModel, theme.
+- **Memory is sensitive.** If `MEMORY.md` already exists with the user's entries, leave it alone unless they explicitly say otherwise.
+- **Snapshot repos must be private.** They contain personal config.
+- **Hooks load on session start.** Tell the user to restart Claude Code after install/uninstall.
+
+## Files in this skill
+
+| File                              | Role                                                                  |
+| --------------------------------- | --------------------------------------------------------------------- |
+| `SKILL.md`                        | This file — agent instructions                                        |
+| `README.md`                       | Human-facing overview (with sources / inspiration)                    |
+| `assets/CLAUDE.md.tmpl`           | Operating-contract template                                           |
+| `assets/hooks/*.sh`               | Four hook scripts                                                     |
+| `assets/commands/*.md`            | `/verify`, `/plan`                                                    |
+| `assets/memory/*.tmpl`            | MEMORY.md index + 3 feedback memories + user_role template            |
+| `scripts/install.sh`              | Idempotent installer (`--dry-run` / `--force` / `--skip-*`)            |
+| `scripts/uninstall.sh`            | Symmetric uninstaller (content-match check; `--all` for full sweep)   |
+| `scripts/snapshot.sh`             | Sanitised mirror of `~/.claude/` → target git repo                    |
+| `scripts/status.sh`               | Read-only — reports installed / modified / missing per surface         |
+| `scripts/audit-prompt.md`         | Prompt template for the monthly remote-audit routine                  |

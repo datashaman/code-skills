@@ -634,12 +634,13 @@ def agent_readiness(root: Path, md_files: list[Path]) -> dict[str, Any]:
                 bare_blocks += 1
             if body.count("\n") < 3 and ("..." in body or "# ..." in body):
                 likely_incomplete.append({"path": rel, "snippet": body.strip()[:80]})
-            if REAL_LOOKING_KEY.search(body):
+            key_match = REAL_LOOKING_KEY.search(body)
+            if key_match:
                 copy_paste_findings.append(
                     {
                         "path": rel,
                         "issue": "real-looking secret/key in code block",
-                        "snippet": REAL_LOOKING_KEY.search(body).group(0)[:40],
+                        "snippet": key_match.group(0)[:40],
                     }
                 )
 

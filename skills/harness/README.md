@@ -2,7 +2,7 @@
 
 A small opinionated skill that turns `~/.claude/` into a proper **harness**: feedforward guides Claude reads before it acts, deterministic sensors that catch drift after, and an optional drift-detection loop that PRs deltas against the latest releases each month.
 
-Sub-actions: **install**, **uninstall**, **snapshot**, **status**, **audit**. All idempotent. No surface gets clobbered without consent.
+Sub-actions: **install**, **uninstall**, **update**, **doctor**, **snapshot**, **status**, **audit**. All idempotent. No surface gets clobbered without consent.
 
 ## Where the idea comes from
 
@@ -32,6 +32,8 @@ This skill is also a sibling of [datashaman/harness-template](https://github.com
 | -------------------------------------------------- | ---------- |
 | "set up my Claude Code", "install harness"         | `install`  |
 | "uninstall harness", "remove the bootstrap"        | `uninstall`|
+| "update harness", "pull latest templates"          | `update`   |
+| "doctor", "diagnose my setup", "is it working?"    | `doctor`   |
 | "snapshot my setup", "back up `~/.claude/`"        | `snapshot` |
 | "what's installed?", "is the harness wired?"       | `status`   |
 | "schedule a monthly audit", "audit my setup"       | `audit`    |
@@ -97,6 +99,32 @@ Symmetric reversal. Conservative defaults:
 - Keeps `CLAUDE.md`, memory entries, and the env var by default — opt in with `--remove-claude-md`, `--remove-memory`, `--remove-env`, or `--all`.
 - Flags: `--dry-run`, `--force` (override content-match check).
 
+## What `update` does
+
+Refreshes installed files against the current templates without clobbering customisations. For each surface compares installed vs template via sha256:
+
+- **identical** → re-install (no-op cosmetically)
+- **missing** → install
+- **modified** → print diff and SKIP, unless you pass `--merge` or `--force`
+
+`--merge` writes the new template to `<file>.new` alongside the original — diff/merge by hand. Run after pulling new versions of this skill.
+
+## What `doctor` does
+
+End-to-end diagnostic that catches drift `status` doesn't see. Sample checks:
+
+- a sha256 tool is on PATH
+- target dir is writable
+- `settings.json` is valid JSON
+- all 4 hooks are executable and wired into `settings.json`
+- hook entries don't point at unexpected paths (foreign installs)
+- smoke-tests `block-force-push.sh` with a known-bad command (must exit 2)
+- memory dir is populated
+- `CLAUDE.md` `## Stack signals` isn't still placeholder text
+- snapshot repo (if `$SNAPSHOT_REPO` set) hasn't gone stale
+
+Exits non-zero on any FAIL. Run after `install` and after each Claude Code upgrade.
+
 ## What `snapshot` does
 
 Mirrors `~/.claude/` into a target git repo (you specify, must be PRIVATE), scrubs caches and known secret patterns, commits + pushes only on diff. Idempotent — second run is a no-op. Used as the input to the monthly `audit` routine.
@@ -125,8 +153,11 @@ None. The skill detects intent from natural language. If unclear, it runs `statu
 | `assets/memory/*.tmpl`            | MEMORY.md index + 3 feedback memories + user_role template            |
 | `scripts/install.sh`              | Idempotent installer (`--dry-run` / `--force` / `--skip-*`)            |
 | `scripts/uninstall.sh`            | Symmetric uninstaller (content-match check; `--all` for full sweep)   |
+| `scripts/update.sh`               | Refresh installed files vs current templates (`--merge` / `--force`)  |
+| `scripts/doctor.sh`               | End-to-end diagnostic (perms, hook smoke-test, settings JSON, etc.)   |
 | `scripts/snapshot.sh`             | Sanitised mirror of `~/.claude/` → target git repo                    |
 | `scripts/status.sh`               | Read-only — reports installed / modified / missing per surface         |
+| `scripts/_detect_stack.py`        | Stack-signal detector — auto-fills `## Stack signals` at install time |
 | `scripts/audit-prompt.md`         | Prompt template for the monthly remote-audit routine                  |
 
 ## Requirements

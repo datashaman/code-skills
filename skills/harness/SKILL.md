@@ -1,16 +1,20 @@
 ---
 name: harness
 description: >
-  Control surface for a "harness-engineering" Claude Code setup at user scope
-  (~/.claude/). Sub-actions: install (operating-contract CLAUDE.md, four
+  Control surface for a "harness-engineering" Claude Code setup at user or
+  project scope. Sub-actions: install (operating-contract CLAUDE.md, four
   guardrail hooks, /verify and /plan slash commands, auto-memory seeds,
   settings.json patch); uninstall (symmetric reversal with content-match
-  protection for customised files); snapshot (sanitised mirror of ~/.claude/
-  to a private git repo); status (report what's installed, modified, or
-  missing); audit (prepare a monthly remote-audit routine that PRs deltas
-  against the latest Anthropic releases and Claude Code community patterns).
-  All sub-actions are idempotent. Use when asked to "set up my Claude Code",
-  "install harness", "uninstall harness", "snapshot my setup", "audit my
+  protection for customised files); update (refresh installed files vs
+  current templates, with --merge for diffable side-by-side); doctor
+  (end-to-end diagnostic — sha256 tools, write perms, hook smoke-test,
+  settings JSON validity, memory + CLAUDE.md state); snapshot (sanitised
+  mirror of ~/.claude/ to a private git repo); status (report what's
+  installed, modified, or missing); audit (prepare a monthly remote-audit
+  routine that PRs deltas against the latest Anthropic releases and Claude
+  Code community patterns). All sub-actions are idempotent. Use when asked
+  to "set up my Claude Code", "install harness", "uninstall harness",
+  "update harness", "diagnose my setup", "snapshot my setup", "audit my
   setup", "harden my Claude", or any request matching the sub-actions.
 user-invocable: true
 ---
@@ -25,13 +29,15 @@ The vocabulary follows OpenAI's *Harness engineering* (https://openai.com/index/
 
 The user invokes this skill, optionally with an action word. Detect intent and run the matching sub-action. If the user says `/harness` without context, run **status** first (it's read-only and informative), then ask which action they want.
 
-| Said by user                                 | Sub-action  | Script                          |
-| -------------------------------------------- | ----------- | ------------------------------- |
-| "install", "set up", "bootstrap"             | `install`   | `scripts/install.sh`            |
-| "uninstall", "remove", "undo"                | `uninstall` | `scripts/uninstall.sh`          |
-| "snapshot", "backup", "mirror to git"        | `snapshot`  | `scripts/snapshot.sh`           |
-| "status", "what's installed", "audit local"  | `status`    | `scripts/status.sh`             |
-| "audit", "schedule audit", "monthly check"   | `audit`     | (prep work — see below)         |
+| Said by user                                  | Sub-action  | Script                          |
+| --------------------------------------------- | ----------- | ------------------------------- |
+| "install", "set up", "bootstrap"              | `install`   | `scripts/install.sh`            |
+| "uninstall", "remove", "undo"                 | `uninstall` | `scripts/uninstall.sh`          |
+| "update", "pull latest templates", "refresh"  | `update`    | `scripts/update.sh`             |
+| "doctor", "diagnose", "is it working"         | `doctor`    | `scripts/doctor.sh`             |
+| "snapshot", "backup", "mirror to git"         | `snapshot`  | `scripts/snapshot.sh`           |
+| "status", "what's installed", "audit local"   | `status`    | `scripts/status.sh`             |
+| "audit", "schedule audit", "monthly check"    | `audit`     | (prep work — see below)         |
 
 Substitute the skill's absolute base directory for `$SKILL_DIR` in every command — it's announced at the top of this invocation.
 
@@ -117,6 +123,45 @@ The script prints a preflight banner showing scope, target, what will be removed
 
 Tell the user to **restart Claude Code** so hook deregistration takes effect.
 
+## update
+
+```bash
+bash "$SKILL_DIR/scripts/update.sh"
+```
+
+Smarter than `install --force`. For each surface compares installed vs current template via sha256 and:
+
+- identical → re-install (no-op cosmetically)
+- missing → install
+- modified → print diff and **SKIP**, unless `--merge` or `--force`
+
+Flags:
+- `--dry-run` — show plan only.
+- `--force` — overwrite ALL files including modified ones (loses customisations).
+- `--merge` — for modified files, write the new template to `<file>.new` alongside the original. The user can diff/merge interactively.
+
+Default behaviour is non-destructive: you'll see diffs but no customised file is overwritten without consent.
+
+## doctor
+
+```bash
+bash "$SKILL_DIR/scripts/doctor.sh"
+```
+
+End-to-end diagnostic. Combines `status` with sanity checks:
+
+- sha256 tool present
+- target dir writable
+- `settings.json` is valid JSON
+- all 4 hooks exist, are executable, and are wired in `settings.json`
+- hook entries don't point at unexpected paths (foreign installs)
+- smoke-test: invoke `block-force-push.sh` with a known-bad command and verify exit code 2
+- memory dir populated (user scope)
+- `CLAUDE.md` present and `## Stack signals` not still placeholder
+- snapshot repo (if `$SNAPSHOT_REPO` set) — last commit recency
+
+Exits non-zero if any FAIL, zero on warnings. Run `doctor` after `install` and after each Claude Code upgrade.
+
 ## snapshot
 
 ```bash
@@ -188,6 +233,9 @@ The remote agent clones the snapshot repo, researches the last ~30 days of Anthr
 | `assets/memory/*.tmpl`            | MEMORY.md index + 3 feedback memories + user_role template            |
 | `scripts/install.sh`              | Idempotent installer (`--dry-run` / `--force` / `--skip-*`)            |
 | `scripts/uninstall.sh`            | Symmetric uninstaller (content-match check; `--all` for full sweep)   |
+| `scripts/update.sh`               | Refresh installed files vs current templates (`--merge` / `--force`)  |
+| `scripts/doctor.sh`               | End-to-end diagnostic (perms, hook smoke-test, settings JSON, etc.)   |
 | `scripts/snapshot.sh`             | Sanitised mirror of `~/.claude/` → target git repo                    |
 | `scripts/status.sh`               | Read-only — reports installed / modified / missing per surface         |
+| `scripts/_detect_stack.py`        | Stack-signal detector — auto-fills `## Stack signals` at install time |
 | `scripts/audit-prompt.md`         | Prompt template for the monthly remote-audit routine                  |

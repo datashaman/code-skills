@@ -33,6 +33,15 @@ if [ -f composer.json ]; then
   [ -x ./vendor/bin/phpunit ] && [ ! -x ./vendor/bin/pest ] && { step "phpunit" ./vendor/bin/phpunit; ran=1; }
 fi
 
+# Shell — match CI: shellcheck every .sh under skills/harness, same exclusions.
+if command -v shellcheck >/dev/null 2>&1 && \
+   compgen -G "skills/harness/scripts/*.sh" >/dev/null; then
+  step "shellcheck" shellcheck -e SC2155,SC2034 \
+    skills/harness/scripts/*.sh \
+    skills/harness/assets/hooks/*.sh
+  ran=1
+fi
+
 # Python.
 if [ -f pyproject.toml ]; then
   command -v ruff   >/dev/null 2>&1 && { step "ruff check" ruff check .; ran=1; }

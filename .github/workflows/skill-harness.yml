@@ -74,7 +74,13 @@ jobs:
                 bash "$SK/scripts/status.sh")
           echo "$out"
           echo "$out" | grep -q "missing" && { echo "::error::status reports missing surfaces after install"; exit 1; } || true
-          echo "$out" | grep -q "modified" && { echo "::error::status reports modified surfaces on fresh install"; exit 1; } || true
+          # CLAUDE.md is expected to differ from the template after install
+          # (stack signals were auto-filled). Filter it out before checking
+          # for any other 'modified' surfaces.
+          if echo "$out" | grep "modified" | grep -v "CLAUDE.md" | grep -q .; then
+            echo "::error::status reports modified non-CLAUDE.md surfaces on fresh install"
+            exit 1
+          fi
 
       - name: re-install — should report 'already current'
         run: |

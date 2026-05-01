@@ -37,7 +37,20 @@ This skill is also a sibling of [datashaman/harness-template](https://github.com
 | "schedule a monthly audit", "audit my setup"       | `audit`    |
 | Just `/harness`                                    | `status`, then asks |
 
+## Scope auto-detection (no forced user-default)
+
+The skill installs at the **scope where it itself lives** — derived from `$SKILL_DIR`. If the skill is at `<X>/.claude/skills/harness/` (or under a plugin cache below `<X>/.claude/`), the install lands at `<X>/.claude/`. That `<X>` becomes user scope if it's `$HOME`, project scope otherwise.
+
+You can override:
+- `--scope=user` → `$HOME/.claude/`
+- `--scope=project` → `$CLAUDE_PROJECT_DIR/.claude/` (or `$PWD/.claude/` if unset)
+- `--target=PATH` → explicit `.claude/` directory
+
+If the skill is being invoked from a checkout (no `.claude/` ancestor), the script errors with a clear message asking for one of the flags above.
+
 ## What `install` lays down
+
+**User scope** (`~/.claude/`):
 
 | Surface                  | What lands                                                                                          |
 | ------------------------ | --------------------------------------------------------------------------------------------------- |
@@ -47,12 +60,33 @@ This skill is also a sibling of [datashaman/harness-template](https://github.com
 | `~/.claude/projects/<slug>/memory/` | `MEMORY.md` index + `user_role`, `feedback_concise`, `feedback_plan_first`, `feedback_verification` |
 | `~/.claude/settings.json`| Adds `env.CLAUDE_CODE_AUTO_COMPACT_WINDOW=400000` + 4 hook entries (only if missing)                |
 
+**Project scope** (`<project>/.claude/`):
+
+| Surface         | What lands                                                                                       |
+| --------------- | ------------------------------------------------------------------------------------------------ |
+| `<project>/CLAUDE.md` | Operating contract — **skipped if a project CLAUDE.md already exists** (`--force` overrides) |
+| `<project>/.claude/hooks/`    | Same 4 hooks                                                                            |
+| `<project>/.claude/commands/` | `/verify`, `/plan`                                                                      |
+| `<project>/.claude/settings.json` | 4 hook entries with **project-relative** paths (`.claude/hooks/...`)                |
+| Memory          | NOT seeded at project scope — memory is per-user by design and lives under `$HOME`               |
+| Env var         | NOT set at project scope — `CLAUDE_CODE_AUTO_COMPACT_WINDOW` is session-wide                     |
+
+Project-scope install never modifies `$HOME`.
+
 The hooks:
 
 - **`block-force-push.sh`** (PreToolUse:Bash) — segment-aware matcher. Blocks force-push to main/master, hard reset to remote, `rm -rf ~`, `--no-verify`, world-writable chmod, branch -D. Allows `--force-with-lease`. Doesn't false-trigger on echoed strings.
 - **`format-on-edit.sh`** (PostToolUse:Write|Edit) — runs Pint / `bun run format` / `npm run format` / ruff / gofmt / cargo fmt if the project's config is present. Silent on success.
 - **`post-compact-reinject.sh`** (PostCompact) — re-cats `./CLAUDE.md`, `./AGENTS.md`, `~/.claude/CLAUDE.md` after autocompact, so the operating contract survives compression.
 - **`verify-before-stop.sh`** (Stop) — refuses Stop if `./scripts/harness-check.sh` fails. `CLAUDE_SKIP_VERIFY=1` to override mid-investigation.
+
+## Escape hatches — pick what to accept
+
+Both `install.sh` and `uninstall.sh` print a **preflight banner** showing the scope, target, and per-surface plan before any change is made. To customise the plan:
+
+- **install:** `--skip-claude-md`, `--skip-hooks`, `--skip-commands`, `--skip-memory`, `--skip-settings`. Or a positive list: `--include=hooks,commands` (everything not listed is skipped).
+- **uninstall:** `--keep-hooks`, `--keep-commands`, `--keep-settings` to preserve specific surfaces that the default would remove. Plus the standard `--remove-claude-md`, `--remove-memory`, `--remove-env`, `--all` to broaden.
+- Always available: `--dry-run` (recommended first run), `--force`.
 
 ## What `uninstall` does
 

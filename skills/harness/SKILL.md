@@ -37,21 +37,57 @@ Substitute the skill's absolute base directory for `$SKILL_DIR` in every command
 
 ## install
 
-Lays down the harness in `~/.claude/`:
+Lays down the harness at the **scope where the skill itself lives**, derived from `$SKILL_DIR`:
 
-| Surface                  | What lands                                                                                          |
+- Skill at `<X>/.claude/skills/harness/` (or under a plugin cache below `<X>/.claude/`) → install at `<X>/.claude/`.
+- If `<X>` is `$HOME`, that's user scope; otherwise project scope.
+- Override with `--scope=user`, `--scope=project`, or `--target=PATH`.
+- If the skill is being run from a checkout (no `.claude/` ancestor), the script errors with a clear message asking for `--scope` or `--target`.
+
+What lands at user scope:
+
+| Surface                  | Path                                                                                                |
 | ------------------------ | --------------------------------------------------------------------------------------------------- |
-| `~/.claude/CLAUDE.md`    | Operating contract template (default stance, editing rules, expected tools, stack-signals placeholder) |
-| `~/.claude/hooks/`       | `block-force-push.sh`, `format-on-edit.sh`, `post-compact-reinject.sh`, `verify-before-stop.sh`     |
-| `~/.claude/commands/`    | `/verify`, `/plan`                                                                                  |
-| `~/.claude/projects/<slug>/memory/` | `MEMORY.md` index + `user_role`, `feedback_concise`, `feedback_plan_first`, `feedback_verification` |
-| `~/.claude/settings.json`| Adds `CLAUDE_CODE_AUTO_COMPACT_WINDOW=400000` env + 4 hook entries — only if missing                |
+| Operating contract       | `~/.claude/CLAUDE.md`                                                                              |
+| Hooks                    | `~/.claude/hooks/{block-force-push,format-on-edit,post-compact-reinject,verify-before-stop}.sh`     |
+| Slash commands           | `~/.claude/commands/{verify,plan}.md`                                                              |
+| Auto-memory              | `~/.claude/projects/<slug>/memory/{MEMORY.md, user_role, feedback_concise, feedback_plan_first, feedback_verification}` |
+| settings.json            | Adds `env.CLAUDE_CODE_AUTO_COMPACT_WINDOW=400000` + 4 hook entries (uses `~/.claude/hooks/...` form) |
+
+What lands at project scope (`<project>/.claude/`):
+
+| Surface         | Path                                                                                            |
+| --------------- | ----------------------------------------------------------------------------------------------- |
+| Operating contract | `<project>/CLAUDE.md` (skipped if it already exists — most projects have one. `--force` overrides) |
+| Hooks           | `<project>/.claude/hooks/*.sh`                                                                 |
+| Commands        | `<project>/.claude/commands/*.md`                                                              |
+| settings.json   | `<project>/.claude/settings.json` — 4 hook entries with `.claude/hooks/...` (project-relative) form. **No env var, no memory** at project scope. |
+| Memory          | (skipped — memory is per-user by design and lives under `$HOME` regardless of project scope)   |
 
 ```bash
 bash "$SKILL_DIR/scripts/install.sh"
 ```
 
-Flags: `--dry-run`, `--force` (overwrite existing files), `--skip-memory`, `--skip-settings`.
+Common flags:
+- `--dry-run` — show the preflight + plan, change nothing.
+- `--force` — overwrite existing files (including project CLAUDE.md).
+
+Per-surface skip flags (escape hatch — pick & choose what to install):
+- `--skip-claude-md`, `--skip-hooks`, `--skip-commands`, `--skip-memory`, `--skip-settings`
+
+Or a positive list (everything else is skipped):
+- `--include=hooks,commands` — install only those.
+- `--include=claude-md,settings` — only the operating contract + settings patch.
+- Valid items: `claude-md`, `hooks`, `commands`, `memory`, `settings`.
+
+The script always prints a **preflight banner** showing scope, target, the per-surface plan (with SKIP markers reflecting the active flags), and a pointer to the uninstaller with `--all` warnings. Read it before proceeding.
+
+After install, walk the user through the hand-edits printed under "Next steps":
+
+1. Fill in `## Stack signals` in CLAUDE.md.
+2. (User scope only) Replace placeholders in `memory/user_role.md` with the user's actual role/projects/stack. **Ask, don't invent.**
+
+Tell them to **restart Claude Code** so hooks load.
 
 After install, walk the user through two hand-edits:
 
@@ -66,13 +102,18 @@ Tell them to **restart Claude Code** so hooks load.
 bash "$SKILL_DIR/scripts/uninstall.sh"
 ```
 
-Symmetric reversal. Conservative defaults:
+Same scope auto-detection as install. Conservative defaults:
 
 - Removes hooks + commands **only if their sha256 still matches** the installed template. User-modified files are kept and reported as `keep (modified)`.
-- Strips the 4 hook entries from `settings.json` and drops empty hook event arrays. Leaves all other settings untouched.
+- Strips the 4 hook entries from `settings.json`; drops empty hook event arrays. Leaves all other settings untouched.
 - **Keeps by default:** `CLAUDE.md`, memory files, the `CLAUDE_CODE_AUTO_COMPACT_WINDOW` env var.
 
-Flags: `--dry-run`, `--force` (skip content-match), `--remove-claude-md`, `--remove-memory`, `--remove-env`, `--all` (= `--force` + the three `--remove-*`).
+Flags:
+- `--dry-run`, `--force` (skip content-match)
+- Broaden the sweep: `--remove-claude-md`, `--remove-memory`, `--remove-env`, `--all`
+- **Escape hatch — keep specific surfaces that default would remove:** `--keep-hooks`, `--keep-commands`, `--keep-settings`
+
+The script prints a preflight banner showing scope, target, what will be removed vs kept, and which `--keep-*` / `--remove-*` flags are active. Always run `--dry-run` first if unsure.
 
 Tell the user to **restart Claude Code** so hook deregistration takes effect.
 

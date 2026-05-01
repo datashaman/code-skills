@@ -104,6 +104,17 @@ Trello board health audit. Queries five dimensions of card data to identify thro
 /audit-trello board="My Board" since=2024-07-01
 ```
 
+### `/bootstrap-harness`
+
+Bootstraps a "harness-engineering" Claude Code setup at user scope (`~/.claude/`): dense operating-contract CLAUDE.md, four deterministic guardrail hooks (block force-push, format on edit, re-inject CLAUDE.md after compact, refuse to stop with broken build), `/verify` and `/plan` slash commands, an auto-memory seed (concise / plan-first / verification-gate feedback memories + a user_role template), and an optional monthly remote-audit pipeline (snapshot the setup to a private git repo, schedule a routine that PRs deltas against the latest Anthropic releases and Claude Code community patterns). Idempotent installer with `--dry-run` / `--force` / `--skip-memory` / `--skip-settings`; never clobbers existing files unless asked.
+
+**Arguments:** None.
+
+**Usage:**
+```
+/bootstrap-harness
+```
+
 ## Other skills I like
 
 ### [`agent-ready-codebase`](https://skills.sh/casper-studios/casper-marketplace/agent-ready-codebase)

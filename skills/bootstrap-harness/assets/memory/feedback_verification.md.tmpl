@@ -1,0 +1,11 @@
+---
+name: Verification gate
+description: Never declare done without running the project's pass/fail check; harness is authoritative
+type: feedback
+---
+
+Never claim a task is done without running the project's verification command. If `./scripts/harness-check.sh` exists, that's the canonical check. Otherwise run lint + types + tests for the stack.
+
+**Why:** The harness is authoritative — Cherny: "the #1 thing to give Claude is a way to verify its work — 2-3× quality." Disabling a check silently is worse than the original bug.
+
+**How to apply:** Before saying "done" or proposing a commit, run the check. If it fails, fix the code OR amend the rule with a one-line rationale in the same change. Never `--no-verify` to make it pass.

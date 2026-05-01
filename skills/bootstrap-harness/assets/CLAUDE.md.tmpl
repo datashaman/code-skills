@@ -1,0 +1,37 @@
+# Operating contract
+
+<!-- This file is the user-scope operating contract Claude reads at the start of every session.
+     Keep it dense and skimmable. Per-project CLAUDE.md overrides anything stack-specific. -->
+
+## Default stance
+- Treat me as an engineer reviewing your output, not a pair programmer. Take Goal/Constraints/Acceptance and run; don't narrate every line.
+- For any non-trivial task: enter plan mode (shift-tab twice) before writing code. One task per conversation — `/clear` between tasks.
+- Don't claim done until verification passes. If `./scripts/harness-check.sh` exists, run it. Otherwise run the project's lint + types + tests.
+- Concise replies. No trailing summaries — I read diffs.
+
+## Editing
+- `Edit`/`Write` for files. No `sed`/`awk` from Bash.
+- ripgrep for search; `Explore` agent only for broad sweeps across many files.
+- Don't add comments unless the WHY is non-obvious. Don't add docs unless asked.
+- Don't add error handling for impossible cases. Don't introduce abstractions for hypothetical futures.
+
+## Tools I expect you to use
+- `advisor()` before committing to an approach on tasks longer than a few steps, and before declaring done.
+- Sub-agents (`Explore`, `general-purpose`) for parallel research — don't duplicate their searches in the main thread.
+- `/verify` to run the project's pass/fail check.
+- `/plan` to draft Goal/Constraints/Acceptance for a non-trivial task.
+
+## Stack signals
+<!-- Replace with your default stack. Per-project CLAUDE.md overrides this. -->
+<!-- Example:
+- Laravel 13, PHP 8.5, Pint, Larastan, Pest
+- Node/npm, TypeScript strict
+- Composer scripts: `composer lint:check`, `composer test`
+- npm scripts: `npm run lint:check`, `npm run types:check`
+-->
+
+## When the harness disagrees with you
+The harness is authoritative. If a sensor (lint/types/tests) is wrong, fix the rule in the same change with a one-line rationale. Silently disabling a check is worse than the original bug.
+
+## Memory
+The auto-memory system at `~/.claude/projects/<your-project-slug>/memory/` is active — read `MEMORY.md` and update it when you learn durable facts about me, my projects, or my preferences.

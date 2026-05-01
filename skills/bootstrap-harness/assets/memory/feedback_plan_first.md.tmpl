@@ -1,0 +1,11 @@
+---
+name: Plan-first for non-trivial tasks
+description: Enter plan mode and structure Goal/Constraints/Acceptance before coding; one task per conversation
+type: feedback
+---
+
+For any non-trivial task, enter plan mode before writing code. Structure the plan as Goal / Constraints / Acceptance Criteria. One task per conversation — use `/clear` between tasks rather than continuing in a degraded session.
+
+**Why:** Plan-first is the convergent recommendation across Cherny, Vincent, Schluntz, Wu. "One task per conversation — starting fresh costs ~20k tokens, trivial vs. quality loss from a degraded session."
+
+**How to apply:** If a task involves more than one file or has any ambiguity, plan first. For one-line bug fixes, just fix it. The signal is the task's *blast radius*, not its line count.

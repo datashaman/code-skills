@@ -18,6 +18,20 @@ npx skills add https://github.com/datashaman/code-skills --skill audit-codebase
 
 ## Skills
 
+### `/audit-ai-strategy`
+
+Audit a codebase's AI strategy through John Cutler's four-bucket lens: bad ideas amplified, good ideas supercharged, genuinely new possibilities, and the meta-skill of reading context. Surfaces where AI is bolted onto broken patterns, where it amplifies what already works, and where the codebase could embrace workflows that only exist because AI is in the loop. Produces a report tagged by bucket with a kill / sharpen / invent / document move per finding, plus an outside-the-box shortlist of small reversible experiments.
+
+**Arguments:**
+- `path` (optional): Subdirectory or subsystem to scope the audit to (default: entire repo)
+- `focus` (optional): Specific concern (e.g. `executors`, `approval flow`, `PR review`, `docs`)
+
+**Usage:**
+```
+/audit-ai-strategy
+/audit-ai-strategy path=src/agents focus="approval flow"
+```
+
 ### `/audit-codebase`
 
 Git-based codebase health audit. Runs five diagnostic git commands to identify churn hotspots, bus factor risks, bug clusters, project momentum, and firefighting patterns — then cross-references findings to surface danger zones.

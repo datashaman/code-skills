@@ -125,6 +125,17 @@ Use this structure:
 
 **Date**: [date] | **Scope**: [path or "whole repo"] | **Focus**: [focus or "general"]
 
+**Framework**: John Cutler, *TBM 420: The AI Playbook Puzzle* — <https://cutlefish.substack.com/p/tbm-420-the-ai-playbook-puzzle>
+
+### The four buckets (60-second primer)
+
+1. **Bad ideas amplified** — pre-AI patterns AI is now making faster/cheaper without anyone asking if the pattern was good. *Move: kill or rethink.*
+2. **Good ideas supercharged** — already-healthy practices that compound when AI joins the loop. *Move: sharpen and invest.*
+3. **Genuinely new possibilities** — workflows with no pre-AI analogue; only viable because AI is participating. *Move: invent (smallest reversible experiment).*
+4. **The meta-skill (context-reading)** — whether the codebase, docs, and process make it easy to understand *why* a practice works here, not just *what*. Determines whether 1–3 land at all. *Move: document or restructure.*
+
+The three traps to avoid: **Amplify Bad** (adding AI to a broken process), **Identity Threat** (praising existing practice to dodge reinvention), **Avoiding It** (generic advice not grounded in this codebase).
+
 ## Executive Summary
 
 [3–5 bullets. Lead with the most expensive bad-idea-amplified finding and the most exciting genuinely-new possibility. Resist the urge to lead with the safe Bucket 2 wins.]
@@ -184,6 +195,8 @@ Use this structure:
 ### 5. Present findings
 
 - Tell the user where the report was saved.
-- Lead with the executive summary, then the **outside-the-box shortlist** — that is the part of the audit that earns its keep.
+- Open with a one-line link to the source article and a single sentence per bucket so a reader who never opens the article still understands the framing:
+  > Framing: John Cutler's *TBM 420: The AI Playbook Puzzle* (<https://cutlefish.substack.com/p/tbm-420-the-ai-playbook-puzzle>) — (1) bad ideas amplified, (2) good ideas supercharged, (3) genuinely new possibilities, (4) the meta-skill of context-reading.
+- Then lead with the executive summary and the **outside-the-box shortlist** — that is the part of the audit that earns its keep.
 - Do not over-index on Bucket 2. It is the comfortable bucket and the least useful one to dwell on.
 - Offer to deepen any single Bucket 3 idea into a concrete plan or to convert Bucket 1 findings into a kill-list PR.

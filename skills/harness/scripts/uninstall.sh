@@ -168,8 +168,8 @@ cat <<EOF
 EOF
 [ $KEEP_HOOKS -eq 1 ]    && echo "    — $TARGET/hooks/*.sh                      (KEEP — --keep-hooks)" \
                          || echo "    • $TARGET/hooks/*.sh"
-[ $KEEP_COMMANDS -eq 1 ] && echo "    — $TARGET/commands/{verify,plan}.md       (KEEP — --keep-commands)" \
-                         || echo "    • $TARGET/commands/{verify,plan}.md"
+[ $KEEP_COMMANDS -eq 1 ] && echo "    — $TARGET/commands/*.md                   (KEEP — --keep-commands)" \
+                         || echo "    • $TARGET/commands/*.md"
 [ $KEEP_SETTINGS -eq 1 ] && echo "    — Hook entries in $TARGET/settings.json   (KEEP — --keep-settings)" \
                          || echo "    • Hook entries in $TARGET/settings.json   (other settings untouched)"
 cat <<EOF

@@ -201,13 +201,13 @@ EOF
 if [ "$SCOPE" = "user" ]; then
   plan_line "$TARGET/CLAUDE.md"                "$SKIP_CLAUDE_MD" "0" "operating contract — edit Stack signals after install"
   plan_line "$TARGET/hooks/*.sh"               "$SKIP_HOOKS"     "0" "4 guardrails: block-force-push / format-on-edit / post-compact-reinject / verify-before-stop"
-  plan_line "$TARGET/commands/{verify,plan}.md" "$SKIP_COMMANDS"  "0" "slash commands"
+  plan_line "$TARGET/commands/*.md" "$SKIP_COMMANDS"  "0" "slash commands"
   plan_line "$MEMORY_DIR/*.md"                 "$SKIP_MEMORY"    "0" "MEMORY.md index + 4 auto-memory templates"
   plan_line "$TARGET/settings.json"            "$SKIP_SETTINGS"  "0" "additive: env.CLAUDE_CODE_AUTO_COMPACT_WINDOW + 4 hook entries (NEVER touches permissions, marketplaces, statusLine, advisorModel, theme)"
 else
   plan_line "$(dirname "$TARGET")/CLAUDE.md"    "$SKIP_CLAUDE_MD" "0" "operating contract — skipped if project already has a CLAUDE.md (use --force to override)"
   plan_line "$TARGET/hooks/*.sh"                "$SKIP_HOOKS"     "0" "4 guardrails"
-  plan_line "$TARGET/commands/{verify,plan}.md"  "$SKIP_COMMANDS"  "0" "slash commands"
+  plan_line "$TARGET/commands/*.md"  "$SKIP_COMMANDS"  "0" "slash commands"
   plan_line "memory templates"                  "$SKIP_MEMORY"    "$PROJECT_SCOPE_NO_MEMORY" "memory is per-user; not seeded at project scope"
   plan_line "$TARGET/settings.json"             "$SKIP_SETTINGS"  "0" "additive: 4 hook entries (no env var at project scope)"
   echo "    (nothing in \$HOME is modified at project scope)"

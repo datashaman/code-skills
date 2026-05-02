@@ -59,7 +59,7 @@ If the skill is being invoked from a checkout (no `.claude/` ancestor), the scri
 | ------------------------ | --------------------------------------------------------------------------------------------------- |
 | `~/.claude/CLAUDE.md`    | Operating-contract template (default stance, editing rules, expected tools)                         |
 | `~/.claude/hooks/`       | `block-force-push.sh`, `format-on-edit.sh`, `post-compact-reinject.sh`, `verify-before-stop.sh`     |
-| `~/.claude/commands/`    | `/verify` (run the project's pass/fail check), `/plan` (Goal/Constraints/Acceptance template)       |
+| `~/.claude/commands/`    | `/verify` (project pass/fail), `/plan` (Goal/Constraints/Acceptance), `/critique` (mid-flow critique pass) |
 | `~/.claude/projects/<slug>/memory/` | `MEMORY.md` index + `user_role`, `feedback_concise`, `feedback_plan_first`, `feedback_verification` |
 | `~/.claude/settings.json`| Adds `env.CLAUDE_CODE_AUTO_COMPACT_WINDOW=400000` + 4 hook entries (only if missing)                |
 
@@ -69,7 +69,7 @@ If the skill is being invoked from a checkout (no `.claude/` ancestor), the scri
 | --------------- | ------------------------------------------------------------------------------------------------ |
 | `<project>/CLAUDE.md` | Operating contract — **skipped if a project CLAUDE.md already exists** (`--force` overrides) |
 | `<project>/.claude/hooks/`    | Same 4 hooks                                                                            |
-| `<project>/.claude/commands/` | `/verify`, `/plan`                                                                      |
+| `<project>/.claude/commands/` | `/verify`, `/plan`, `/critique`                                                         |
 | `<project>/.claude/settings.json` | 4 hook entries with **project-relative** paths (`.claude/hooks/...`)                |
 | Memory          | NOT seeded at project scope — memory is per-user by design and lives under `$HOME`               |
 | Env var         | NOT set at project scope — `CLAUDE_CODE_AUTO_COMPACT_WINDOW` is session-wide                     |
@@ -170,7 +170,7 @@ None. The skill detects intent from natural language. If unclear, it runs `statu
 | `README.md`                       | This — human-facing overview                                          |
 | `assets/CLAUDE.md.tmpl`           | Operating-contract template                                           |
 | `assets/hooks/*.sh`               | Four hook scripts                                                     |
-| `assets/commands/*.md`            | `/verify`, `/plan`                                                    |
+| `assets/commands/*.md`            | `/verify`, `/plan`, `/critique`                                       |
 | `assets/memory/*.tmpl`            | MEMORY.md index + 3 feedback memories + user_role template            |
 | `scripts/install.sh`              | Idempotent installer (`--dry-run` / `--force` / `--skip-*`)            |
 | `scripts/uninstall.sh`            | Symmetric uninstaller (content-match check; `--all` for full sweep)   |

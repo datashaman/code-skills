@@ -15,11 +15,18 @@
 - Don't add comments unless the WHY is non-obvious. Don't add docs unless asked.
 - Don't add error handling for impossible cases. Don't introduce abstractions for hypothetical futures.
 
+## The PTC loop
+Work in this harness is a **Plan → Tool → Critique** loop, named so we share vocabulary. Reflexion (Shinn et al. 2023, https://arxiv.org/abs/2303.11366) is the canonical reference for the pattern.
+- **Plan** — `/plan`, plan mode (shift-tab twice). Draft Goal/Constraints/Acceptance before editing.
+- **Tool** — `Edit`, `Write`, `Bash`, sub-agents. Where the work happens.
+- **Critique** — `verify-before-stop.sh` and `advisor()` at boundaries; `/critique` *between* tool steps when an interpretation is about to harden. Don't only critique at Stop.
+
 ## Tools I expect you to use
 - `advisor()` before committing to an approach on tasks longer than a few steps, and before declaring done.
 - Sub-agents (`Explore`, `general-purpose`) for parallel research — don't duplicate their searches in the main thread.
 - `/verify` to run the project's pass/fail check.
 - `/plan` to draft Goal/Constraints/Acceptance for a non-trivial task.
+- `/critique` to deliberately critique the most recent change mid-flow (don't wait for Stop).
 
 ## Stack signals
 <!-- Replace with your default stack. Per-project CLAUDE.md overrides this. -->

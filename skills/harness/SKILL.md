@@ -65,7 +65,7 @@ What lands at user scope:
 | ------------------------ | --------------------------------------------------------------------------------------------------- |
 | Operating contract       | `~/.claude/CLAUDE.md`                                                                              |
 | Hooks                    | `~/.claude/hooks/{block-force-push,format-on-edit,post-compact-reinject,verify-before-stop}.sh`     |
-| Slash commands           | `~/.claude/commands/{verify,plan}.md`                                                              |
+| Slash commands           | `~/.claude/commands/{verify,plan,critique}.md`                                                     |
 | Auto-memory              | `~/.claude/projects/<slug>/memory/{MEMORY.md, user_role, feedback_concise, feedback_plan_first, feedback_verification}` |
 | settings.json            | Adds `env.CLAUDE_CODE_AUTO_COMPACT_WINDOW=400000` + 4 hook entries (uses `~/.claude/hooks/...` form) |
 
@@ -75,7 +75,7 @@ What lands at project scope (`<project>/.claude/`):
 | --------------- | ----------------------------------------------------------------------------------------------- |
 | Operating contract | `<project>/CLAUDE.md` (skipped if it already exists — most projects have one. `--force` overrides) |
 | Hooks           | `<project>/.claude/hooks/*.sh`                                                                 |
-| Commands        | `<project>/.claude/commands/*.md`                                                              |
+| Commands        | `<project>/.claude/commands/{verify,plan,critique}.md`                                          |
 | settings.json   | `<project>/.claude/settings.json` — 4 hook entries with `.claude/hooks/...` (project-relative) form. **No env var, no memory** at project scope. |
 | Memory          | (skipped — memory is per-user by design and lives under `$HOME` regardless of project scope)   |
 
@@ -278,6 +278,10 @@ Env knobs (mirror `snapshot.sh`):
 
 Scope: the snapshot repo doesn't mirror harness scripts or local search roots, so the remote agent does its own in-process structural pass (index sync, frontmatter) and adds the semantic checks. Stale-citation analysis stays local-only — the search roots aren't available remotely. The remote agent PRs `audits/memory/YYYY-MM-DD.md` with proposed edits and never modifies any memory entry.
 
+## PostToolUse critique hook — recommendation
+
+We considered a hook that fires after N consecutive `Edit`/`Write` calls and runs an automatic critique pass (diff summary + `advisor()` check). **Recommendation: don't ship it.** The boundary critiques we already have (`verify-before-stop.sh` at Stop, `advisor()` calls bracketing non-trivial work, `/critique` available on demand mid-flow) cover the same gap with much better signal-to-noise. An always-on PostToolUse critique would (a) burn tokens and wall-clock on edits that don't need it, (b) train the agent to ignore the noise, and (c) duplicate what `/critique` already provides on user demand. Revisit if users report that mid-flow drift is escaping all three boundary surfaces — but the right next step there would be tuning when `/critique` gets *suggested*, not making it automatic.
+
 ## Constraints
 
 - **Never auto-fill stack signals or user_role.** Templates have placeholders; ask the user to fill them.
@@ -294,7 +298,7 @@ Scope: the snapshot repo doesn't mirror harness scripts or local search roots, s
 | `README.md`                       | Human-facing overview (with sources / inspiration)                    |
 | `assets/CLAUDE.md.tmpl`           | Operating-contract template                                           |
 | `assets/hooks/*.sh`               | Four hook scripts                                                     |
-| `assets/commands/*.md`            | `/verify`, `/plan`                                                    |
+| `assets/commands/*.md`            | `/verify`, `/plan`, `/critique`                                       |
 | `assets/memory/*.tmpl`            | MEMORY.md index + 3 feedback memories + user_role template            |
 | `scripts/install.sh`              | Idempotent installer (`--dry-run` / `--force` / `--skip-*`)            |
 | `scripts/uninstall.sh`            | Symmetric uninstaller (content-match check; `--all` for full sweep)   |

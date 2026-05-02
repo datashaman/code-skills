@@ -259,21 +259,24 @@ What it checks:
 3. **Stale citations** — path-shaped tokens (anything starting with `~/`, `/Users/`, `./`, etc., or ending in a known source extension) that resolve nowhere across `~/.claude/projects/` and `~/Projects/`. Conservative on purpose — false positives cost more than misses.
 4. **Possible duplicates** — pairs of memories of the same `type` whose `name` or `description` are lexically similar (Jaccard ≥ 0.5). Flag, don't merge.
 
-Output: `<memory>/_memoize-report.md` (leading underscore so it's never indexed by `MEMORY.md`). The report is byte-stable on equal runs — running twice in a row produces an identical file.
+Output: a single file at `<memory>/_memoize-report.md`. The leading underscore is the contract — `MEMORY.md` indexing rules and the remote routine both ignore `_*.md`, so the report itself never gets treated as a memory entry. The report is byte-stable on equal runs (two consecutive invocations produce an identical file).
 
 Flags:
 - `--dry-run` — print the plan + report preview, write nothing.
 - `--target=PATH` — explicit memory dir.
 
-Env knobs (mirror `snapshot.sh`): `CLAUDE_DIR`, `USER_PROJECT_KEY`, `MEMOIZE_SEARCH_ROOTS`.
+Env knobs (mirror `snapshot.sh`):
+- `CLAUDE_DIR` — root of the Claude Code config dir. Search-root defaults track this, so a custom `CLAUDE_DIR` cascades correctly.
+- `USER_PROJECT_KEY` — the slug under `<CLAUDE_DIR>/projects/`.
+- `MEMOIZE_SEARCH_ROOTS` — colon-separated (PATH-style, supports paths with spaces) list of roots to resolve stale citations against. Defaults to `<CLAUDE_DIR>/projects:$HOME/Projects`.
 
-**Scheduled routine.** For deeper passes (conceptual duplicates, outdated facts, conflicts the lexical script can't see), wire it as a weekly `/schedule` job using `scripts/memoize-prompt.md`. Suggested config:
+**Scheduled routine.** For the conceptual drift the lexical script can't see (semantic duplicates, outdated facts, conflicting guidance), wire a weekly `/schedule` job using `scripts/memoize-prompt.md`. Suggested config:
 - cron: `0 6 * * 0` (Sunday 06:00 UTC)
 - model: `claude-opus-4-7`
 - tools: Bash, Read, Write, Edit, Glob, Grep, Agent
 - source: the user's snapshot repo (run `harness snapshot` first)
 
-The remote agent runs `memoize.sh`, layers in semantic checks, and PRs `audits/memory/YYYY-MM-DD.md` with proposed edits. It never modifies memory directly — the user reviews and applies.
+Scope: the snapshot repo doesn't mirror harness scripts or local search roots, so the remote agent does its own in-process structural pass (index sync, frontmatter) and adds the semantic checks. Stale-citation analysis stays local-only — the search roots aren't available remotely. The remote agent PRs `audits/memory/YYYY-MM-DD.md` with proposed edits and never modifies any memory entry.
 
 ## Constraints
 

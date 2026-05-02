@@ -23,7 +23,9 @@
 # Env knobs (mirror snapshot.sh):
 #   CLAUDE_DIR=/path/to/.claude
 #   USER_PROJECT_KEY=-Users-foo
-#   MEMOIZE_SEARCH_ROOTS="$HOME/.claude/projects $HOME/Projects"
+#   MEMOIZE_SEARCH_ROOTS="$CLAUDE_DIR/projects:$HOME/Projects"
+#     Colon-separated (like PATH) so paths-with-spaces work. Defaults track
+#     $CLAUDE_DIR so an override cascades correctly.
 
 set -euo pipefail
 
@@ -46,7 +48,7 @@ USER_PROJECT_KEY="${USER_PROJECT_KEY:-$(printf '%s' "$HOME" | tr '/' '-')}"
 if [ -z "$TARGET" ]; then
   TARGET="$CLAUDE_DIR/projects/$USER_PROJECT_KEY/memory"
 fi
-SEARCH_ROOTS="${MEMOIZE_SEARCH_ROOTS:-$HOME/.claude/projects $HOME/Projects}"
+SEARCH_ROOTS="${MEMOIZE_SEARCH_ROOTS:-$CLAUDE_DIR/projects:$HOME/Projects}"
 
 if [ ! -d "$TARGET" ]; then
   echo "error: memory dir not found: $TARGET" >&2
@@ -88,7 +90,9 @@ import os, re, sys, hashlib
 from pathlib import Path
 
 target = Path(os.environ["TARGET"])
-roots = [Path(p) for p in os.environ["SEARCH_ROOTS"].split() if p]
+roots = [Path(p) for p in os.environ["SEARCH_ROOTS"].split(":") if p]
+PRUNE_DIRS = {".git", "node_modules", "vendor", "__pycache__", ".venv",
+              "venv", "target", "dist", "build", ".next", ".cache"}
 
 REPORT_NAME = "_memoize-report.md"
 INDEX = "MEMORY.md"
@@ -165,11 +169,13 @@ fm_issues.sort()
 
 # ---- 3. Stale citations ----
 # Conservative — flag a token only if it's *unambiguously* a real filesystem
-# path. Two ways to qualify:
-#   (a) starts with a hard prefix that's almost always a path: ~/, /Users/,
+# path. Token must contain a `/` AND either:
+#   (a) start with a hard prefix that's almost always a path: ~/, /Users/,
 #       /home/, /etc/, /opt/, /var/, /tmp/, ./, ../
-#   (b) ends in a recognised source-file extension.
-# This drops slash-commands (/verify, /grade), brace expansions
+#   (b) end in a recognised source-file extension.
+# Bare basenames like `settings.json` are *intentionally* skipped — too many
+# false positives (string literals, log lines, prose mentions).
+# This also drops slash-commands (/verify, /grade), brace expansions
 # ({a,b,c}), regex-ish strings, and similar false positives.
 PATH_PREFIXES = ("~/", "/Users/", "/home/", "/etc/", "/opt/", "/var/", "/tmp/",
                  "./", "../")
@@ -211,24 +217,26 @@ def resolves(tok):
         candidates = [Path(os.path.expanduser(tok))]
     elif tok.startswith("/"):
         candidates = [Path(tok)]
-    elif tok.startswith("./"):
-        candidates = [Path(tok)]
+    elif tok.startswith(("./", "../")):
+        # Don't resolve against CWD — that makes results depend on where
+        # the script was invoked from. Resolve under each search root.
+        rel = tok.lstrip(".").lstrip("/")
+        candidates = [r / rel for r in roots]
     else:
-        # Treat as a relative project-ish path: try under each search root.
+        # Bare relative path (no leading marker): try under each search root.
         candidates = [r / tok for r in roots]
-        # also try as a basename match under any root (one level only)
-        # (skipped — too broad; conservatism wins)
     found = any(c.exists() for c in candidates)
     if not found:
-        # last-ditch: a basename-only suffix match under search roots, depth 4
+        # last-ditch: a basename suffix match under search roots, depth 4,
+        # pruning heavy dirs.
         base = tok.rstrip("/").split("/")[-1]
         if base and len(base) > 2:
             for r in roots:
                 if not r.exists():
                     continue
-                # single-shot find: walk up to depth 4
                 hit = False
                 for dirpath, dirnames, filenames in os.walk(r):
+                    dirnames[:] = [d for d in dirnames if d not in PRUNE_DIRS]
                     depth = len(Path(dirpath).relative_to(r).parts)
                     if depth > 4:
                         dirnames[:] = []
@@ -358,13 +366,8 @@ out.append(f"Findings: {total_findings} "
 
 text = "\n".join(out).rstrip() + "\n"
 sys.stdout.write(text)
-
-# Also emit a one-line summary to stderr for the bash wrapper.
-sys.stderr.write(f"SUMMARY findings={total_findings}\n")
 PY
 
-# Read the python summary off stderr — but we already piped to TMP only, so
-# re-run is wasteful. Cheaper: tail the report's last line for the summary.
 SUMMARY="$(tail -n 1 "$TMP")"
 
 if [ "$DRY_RUN" -eq 1 ]; then

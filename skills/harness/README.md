@@ -26,7 +26,7 @@ This skill is also a sibling of [datashaman/harness-template](https://github.com
 
 ## Context model: spatial vs temporal
 
-The harness manages context on two axes. Naming them gives design discussions vocabulary ("is this a spatial concern or a temporal one?") and makes coverage gaps visible at a glance. Hooks aren't on either table — they're *sensors* (feedback), not context surfaces; they're documented under install below.
+The harness manages context on two axes. Naming them gives design discussions vocabulary ("is this a spatial concern or a temporal one?") and makes coverage gaps visible at a glance. Most hooks are *sensors* on the feedback axis — they're documented under install below, not here. The one exception is `post-compact-reinject.sh`: implemented as a hook, but its job is *context preservation*, so it sits in the temporal table.
 
 **Spatial — what occupies the window in a given turn:**
 
@@ -34,6 +34,7 @@ The harness manages context on two axes. Naming them gives design discussions vo
 | ----------------------- | ----------------------------- | ------------------------------------------------------------------ |
 | `~/.claude/CLAUDE.md`   | yes                           | user-scope operating contract                                      |
 | `<project>/CLAUDE.md`   | yes (when in that project)    | project-scope override                                             |
+| `<project>/AGENTS.md`   | yes (when present)            | sibling to project CLAUDE.md; re-injected after autocompact        |
 | `MEMORY.md` (index)     | yes                           | pointers to memory entries, not the entries themselves             |
 | Memory entries          | on demand                     | loaded when the agent decides they're relevant                     |
 | Skills                  | on demand                     | progressive disclosure — `SKILL.md` frontmatter triggers the load  |

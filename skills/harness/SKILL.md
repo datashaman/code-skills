@@ -1,28 +1,17 @@
 ---
 name: harness
 description: >
-  Control surface for a "harness-engineering" Claude Code setup at user or
-  project scope. Sub-actions: install (operating-contract CLAUDE.md, four
-  guardrail hooks, /verify and /plan slash commands, auto-memory seeds,
-  settings.json patch); uninstall (symmetric reversal with content-match
-  protection for customised files); update (refresh installed files vs
-  current templates, with --merge for diffable side-by-side); doctor
-  (end-to-end diagnostic — sha256 tools, write perms, hook smoke-test,
-  settings JSON validity, memory + CLAUDE.md state); adopt (retrofit into
-  an existing project — detects stack, scaffolds a starter scripts/harness-
-  check.sh, prints next-step install command); snapshot (sanitised mirror
-  of ~/.claude/ to a private git repo); status (report what's installed,
-  modified, or missing); audit (prepare a monthly remote-audit routine
-  that PRs deltas against the latest Anthropic releases and Claude Code
-  community patterns); memoize (deterministic memory hygiene pass —
-  index sync, frontmatter, stale citations, lexical duplicates — emits
-  a stable report; pairs with a weekly /schedule routine). All
-  sub-actions are idempotent. Use when asked to "set up my Claude
-  Code", "install harness", "uninstall harness", "update harness",
-  "diagnose my setup", "adopt harness in this project", "retrofit",
-  "snapshot my setup", "audit my setup", "harden my Claude",
-  "memoize", "consolidate memory", "prune memory", or any request
-  matching the sub-actions.
+  Control surface for a harness-engineering Claude Code setup at user or
+  project scope. Handles install, uninstall, update, doctor, adopt,
+  snapshot, status, audit, and memoize. Installs CLAUDE.md, guardrail hooks,
+  /verify, /plan, /critique, memory seeds, and settings patches; can also
+  retrofit an existing project with scripts/harness-check.sh, report install
+  state, snapshot ~/.claude/, and run deterministic memory hygiene. All
+  sub-actions are idempotent. Use when asked to "set up my Claude Code",
+  "install harness", "uninstall harness", "update harness", "diagnose my
+  setup", "adopt harness", "retrofit", "snapshot my setup", "audit my
+  setup", "harden my Claude", "memoize", "consolidate memory", or "prune
+  memory".
 user-invocable: true
 ---
 

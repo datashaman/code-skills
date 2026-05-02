@@ -24,6 +24,34 @@ The day-to-day patterns this skill ships came from these voices, who keep publis
 
 This skill is also a sibling of [datashaman/harness-template](https://github.com/datashaman/harness-template) — that repo is the *project-scope* harness (drop-in stack profiles, `harness/policies/`, `scripts/harness-check.sh`, `harness/grades.yml`). `/harness` is the user-scope counterpart.
 
+## Context model: spatial vs temporal
+
+The harness manages context on two axes. Naming them gives design discussions vocabulary ("is this a spatial concern or a temporal one?") and makes coverage gaps visible at a glance. Hooks aren't on either table — they're *sensors* (feedback), not context surfaces; they're documented under install below.
+
+**Spatial — what occupies the window in a given turn:**
+
+| Surface                 | Always loaded?                | Notes                                                              |
+| ----------------------- | ----------------------------- | ------------------------------------------------------------------ |
+| `~/.claude/CLAUDE.md`   | yes                           | user-scope operating contract                                      |
+| `<project>/CLAUDE.md`   | yes (when in that project)    | project-scope override                                             |
+| `MEMORY.md` (index)     | yes                           | pointers to memory entries, not the entries themselves             |
+| Memory entries          | on demand                     | loaded when the agent decides they're relevant                     |
+| Skills                  | on demand                     | progressive disclosure — `SKILL.md` frontmatter triggers the load  |
+| System prompt           | yes                           | tools + harness instructions                                       |
+
+**Temporal — what survives across boundaries:**
+
+| Boundary                          | Mechanism                                                                         |
+| --------------------------------- | --------------------------------------------------------------------------------- |
+| Autocompact (mid-session)         | `post-compact-reinject.sh` — re-cats `CLAUDE.md` / `AGENTS.md` / `~/.claude/CLAUDE.md` |
+| Between tool steps (mid-session)  | `/critique` — deliberate critique pass without waiting for Stop (PTC, see #6)     |
+| Session end → next session        | auto-memory write — agent stores durable facts to `memory/`                       |
+| Across sessions                   | `memory/` store + `MEMORY.md` index                                               |
+| Memory hygiene over time          | `memoize` sub-action (deterministic) + weekly remote routine (semantic)           |
+| Config drift over time            | `snapshot` (mirror to private repo) + monthly remote `audit` routine              |
+
+The PTC loop named in `CLAUDE.md` cuts across these axes: **Plan** is spatial preparation (load the right context before editing), **Tool** is the work itself, **Critique** is *temporal* — carrying findings forward, at session boundaries (Stop gate, `advisor()`) and intra-session via `/critique`.
+
 ## When to use
 
 `/harness` — the skill detects intent from your phrasing. Examples:

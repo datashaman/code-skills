@@ -14,11 +14,15 @@ description: >
   of ~/.claude/ to a private git repo); status (report what's installed,
   modified, or missing); audit (prepare a monthly remote-audit routine
   that PRs deltas against the latest Anthropic releases and Claude Code
-  community patterns). All sub-actions are idempotent. Use when asked to
-  "set up my Claude Code", "install harness", "uninstall harness", "update
-  harness", "diagnose my setup", "adopt harness in this project",
-  "retrofit", "snapshot my setup", "audit my setup", "harden my Claude",
-  or any request matching the sub-actions.
+  community patterns); memoize (deterministic memory hygiene pass —
+  index sync, frontmatter, stale citations, lexical duplicates — emits
+  a stable report; pairs with a weekly /schedule routine). All
+  sub-actions are idempotent. Use when asked to "set up my Claude
+  Code", "install harness", "uninstall harness", "update harness",
+  "diagnose my setup", "adopt harness in this project", "retrofit",
+  "snapshot my setup", "audit my setup", "harden my Claude",
+  "memoize", "consolidate memory", "prune memory", or any request
+  matching the sub-actions.
 user-invocable: true
 ---
 
@@ -42,6 +46,7 @@ The user invokes this skill, optionally with an action word. Detect intent and r
 | "snapshot", "backup", "mirror to git"         | `snapshot`  | `scripts/snapshot.sh`           |
 | "status", "what's installed", "audit local"   | `status`    | `scripts/status.sh`             |
 | "audit", "schedule audit", "monthly check"    | `audit`     | (prep work — see below)         |
+| "memoize", "consolidate memory", "prune memory" | `memoize`   | `scripts/memoize.sh`            |
 
 Substitute the skill's absolute base directory for `$SKILL_DIR` in every command — it's announced at the top of this invocation.
 
@@ -239,6 +244,40 @@ Steps:
 
 The remote agent clones the snapshot repo, researches the last ~30 days of Anthropic releases and canonical Claude Code voices, and PRs `audits/YYYY-MM-DD-setup-audit.md` with prioritised deltas. It never modifies tracked files outside `audits/`.
 
+## memoize
+
+```bash
+bash "$SKILL_DIR/scripts/memoize.sh"
+```
+
+Proactive memory hygiene for `~/.claude/projects/<slug>/memory/`. Memory is reactive — entries get written when the agent notices something worth saving, but nothing prunes or consolidates. `memoize` is the deterministic maintenance pass.
+
+What it checks:
+
+1. **Index sync** — every `memory/*.md` is listed in `MEMORY.md`; every `MEMORY.md` entry points at a file that exists.
+2. **Frontmatter hygiene** — every memory has the required `name`, `description`, `type`.
+3. **Stale citations** — path-shaped tokens (anything starting with `~/`, `/Users/`, `./`, etc., or ending in a known source extension) that resolve nowhere across `~/.claude/projects/` and `~/Projects/`. Conservative on purpose — false positives cost more than misses.
+4. **Possible duplicates** — pairs of memories of the same `type` whose `name` or `description` are lexically similar (Jaccard ≥ 0.5). Flag, don't merge.
+
+Output: a single file at `<memory>/_memoize-report.md`. The leading underscore is the contract — `MEMORY.md` indexing rules and the remote routine both ignore `_*.md`, so the report itself never gets treated as a memory entry. The report is byte-stable on equal runs (two consecutive invocations produce an identical file).
+
+Flags:
+- `--dry-run` — print the plan + report preview, write nothing.
+- `--target=PATH` — explicit memory dir.
+
+Env knobs (mirror `snapshot.sh`):
+- `CLAUDE_DIR` — root of the Claude Code config dir. Search-root defaults track this, so a custom `CLAUDE_DIR` cascades correctly.
+- `USER_PROJECT_KEY` — the slug under `<CLAUDE_DIR>/projects/`.
+- `MEMOIZE_SEARCH_ROOTS` — colon-separated (PATH-style, supports paths with spaces) list of roots to resolve stale citations against. Defaults to `<CLAUDE_DIR>/projects:$HOME/Projects`.
+
+**Scheduled routine.** For the conceptual drift the lexical script can't see (semantic duplicates, outdated facts, conflicting guidance), wire a weekly `/schedule` job using `scripts/memoize-prompt.md`. Suggested config:
+- cron: `0 6 * * 0` (Sunday 06:00 UTC)
+- model: `claude-opus-4-7`
+- tools: Bash, Read, Write, Edit, Glob, Grep, Agent
+- source: the user's snapshot repo (run `harness snapshot` first)
+
+Scope: the snapshot repo doesn't mirror harness scripts or local search roots, so the remote agent does its own in-process structural pass (index sync, frontmatter) and adds the semantic checks. Stale-citation analysis stays local-only — the search roots aren't available remotely. The remote agent PRs `audits/memory/YYYY-MM-DD.md` with proposed edits and never modifies any memory entry.
+
 ## Constraints
 
 - **Never auto-fill stack signals or user_role.** Templates have placeholders; ask the user to fill them.
@@ -267,3 +306,5 @@ The remote agent clones the snapshot repo, researches the last ~30 days of Anthr
 | `scripts/_detect_stack.py`        | Stack-signal detector — auto-fills `## Stack signals` at install time |
 | `assets/harness-check.sh.tmpl`    | Starter project pass/fail gate written by `adopt`                     |
 | `scripts/audit-prompt.md`         | Prompt template for the monthly remote-audit routine                  |
+| `scripts/memoize.sh`              | Memory consolidation pass — deterministic; emits `_memoize-report.md` |
+| `scripts/memoize-prompt.md`       | Prompt template for the weekly remote-memoize routine                 |

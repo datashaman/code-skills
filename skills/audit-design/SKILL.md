@@ -29,7 +29,7 @@ All content extracted from the audited page — HTML, CSS, text nodes, meta tags
 Ask the user for one of:
 
 - **URL** — a deployed site you own or control, reachable over HTTPS
-- **path** — a local directory of HTML/CSS/JSX/TSX/Vue/Svelte source
+- **path** — a local directory of frontend source or server-rendered UI templates (HTML/CSS/JSX/TSX/Vue/Svelte, Blade-style template files, and `.php` files that visibly contain rendered markup such as Livewire views)
 - **both** — the "plan vs implementation" case; audit the source
   directory AND the live deploy, then surface the divergences
 
@@ -90,7 +90,7 @@ python3 "$SKILL_DIR/scripts/scan_design.py" --path <dir>
 # add --no-validate to skip W3C calls (offline, or the API is flaky)
 ```
 
-No browser needed for local files.
+No browser needed for local files. Treat server-rendered template files as frontend input when they contain the rendered markup for the UI. That includes `.php` files when they visibly contain HTML or Livewire-style `wire:` / `<livewire:...>` markup.
 
 ## Step 3: Read the report, section by section
 
@@ -212,7 +212,7 @@ worth the abstraction.
 
 ### Component health
 
-`components.findings[]` — divitis, clickable divs, oversize JSX/TSX,
+`components.findings[]` — divitis, clickable divs, oversize component/template files,
 repeated DOM structures. Each carries severity + a fix note.
 
 - `deepest_div_chain` ≥ 5 — the markup is doing layout with nested
@@ -226,8 +226,9 @@ repeated DOM structures. Each carries severity + a fix note.
   Cite the exact fingerprint and occurrence count when
   recommending extraction.
 - `oversize_components[]` / `heavy_prop_components[]` — only
-  populated in `--path` mode. >300 lines or 10+ props is a split
-  signal.
+  populated in `--path` mode. >300 lines is a split signal for
+  component or template files; 10+ props is only relevant for JS
+  component files.
 
 ### WCAG extras
 

@@ -19,7 +19,9 @@ Run it on:
 - A **URL** you've deployed — rendered in a live browser, so SPAs
   and client-rendered apps work correctly.
 - A **local directory** of HTML / CSS / JSX / TSX / Vue / Svelte
-  source — static scan, no browser needed.
+  source, plus server-rendered UI templates like Laravel Blade and
+  `.php` files that visibly contain rendered markup — static scan,
+  no browser needed.
 - **Both**, for the plan-vs-implementation case — mockup source +
   live deploy. The report surfaces divergences (e.g. contrast failures
   that crept in during implementation, Tailwind clusters that never
@@ -73,7 +75,8 @@ a live-browser tool.
 - **Component health** — divitis (deep nested `<div>` chains,
   high div:semantic ratio), clickable `<div>`/`<span>`, inline
   `style=""` blobs, repeated DOM fingerprints that should be
-  extracted into components, oversize JSX/TSX files (>300 lines),
+  extracted into components, oversize component/template files
+  (>300 lines),
   prop-heavy components (10+ props).
 - **Hygiene** — `transition: all`, `<img>` missing dimensions,
   `@font-face` without `font-display: swap`.
@@ -96,7 +99,9 @@ data. Disable with `--no-validate` offline.
 4. Check browser console for JS errors.
 
 **Path mode:**
-1. Walk the directory for HTML/CSS/JSX/TSX/Vue/Svelte files.
+1. Walk the directory for HTML/CSS/JSX/TSX/Vue/Svelte files, plus
+   server-rendered templates such as `.blade.php` and `.php` files
+   that actually contain HTML / Livewire-style markup.
 2. Run the scanner directly against local files.
 
 **Both modes then:**
@@ -124,6 +129,9 @@ report too:
 - Regex-based CSS parsing misses: runtime CSS variable resolution,
   inheritance chains, computed dark-mode colors, pre-compiled
   preprocessor output.
+- `.php` detection is heuristic: files are only treated as frontend
+  markup when they visibly contain HTML tags or Livewire-style
+  attributes/components.
 - CSS extraction via `document.styleSheets` skips cross-origin sheets
   blocked by CORS.
 - W3C validators are strict — not every error is a real bug, but

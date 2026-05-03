@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Static design audit scanner. Accepts a local path (HTML/CSS/JSX) or a
-URL, extracts inline + linked CSS, and emits a single JSON object with
-findings across eight categories:
+Static design audit scanner. Accepts a local path (HTML/CSS/JSX plus
+server-rendered templates like Blade) or a URL, extracts inline + linked
+CSS, and emits a single JSON object with findings across eight categories:
 
   contrast        — WCAG ratio pairs pulled from same-rule color+background
   color_signaling — semantic state classes (success/error/warning) that
@@ -25,8 +25,8 @@ findings across eight categories:
   components      — unhealthy component usage: divitis / deep nesting,
                     <div role="button"> anti-patterns, inline style
                     blobs, repeated DOM structures that should be
-                    extracted into components, and oversize JSX/TSX
-                    component files
+                    extracted into components, and oversize component /
+                    template files
   hygiene         — outline:none, transition:all, user-scalable=no,
                     <img> missing dimensions, missing font-display:swap
   validation      — W3C HTML + CSS validator summary (online call,
@@ -48,6 +48,48 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+
+SKIP_DIR_FRAGMENTS = ("/node_modules/", "/.git/", "/dist/", "/build/", "/.next/")
+MARKUP_EXTS = {".html", ".htm", ".jsx", ".tsx", ".vue", ".svelte"}
+STYLE_EXTS = {".css", ".scss", ".sass", ".less"}
+MARKUP_SUFFIXES = (
+    ".blade.php",
+    ".twig",
+    ".twig.html",
+    ".erb",
+    ".ejs",
+    ".njk",
+    ".liquid",
+    ".astro",
+)
+PHP_TEMPLATE_EXTS = {".php"}
+COMPONENT_SCRIPT_SUFFIXES = (".jsx", ".tsx", ".vue", ".svelte")
+COMPONENT_TEMPLATE_SUFFIXES = (".blade.php",)
+HTMLISH_RE = re.compile(
+    r"<(?:!doctype|html|body|head|main|section|article|aside|nav|header|footer|form|label|input|button|select|textarea|table|thead|tbody|tr|td|th|ul|ol|li|a|img|picture|video|canvas|svg|h[1-6]|div|span)\b",
+    re.IGNORECASE,
+)
+LIVEWIREISH_RE = re.compile(r"\bwire:[\w.-]+\s*=|<livewire:[\w.-]+", re.IGNORECASE)
+
+
+def is_markup_file(filename, content=None):
+    lower = filename.lower()
+    ext = os.path.splitext(lower)[1]
+    if ext in MARKUP_EXTS or lower.endswith(MARKUP_SUFFIXES):
+        return True
+    if ext in PHP_TEMPLATE_EXTS and content is not None:
+        return bool(HTMLISH_RE.search(content) or LIVEWIREISH_RE.search(content))
+    return False
+
+
+def is_style_file(filename):
+    return os.path.splitext(filename.lower())[1] in STYLE_EXTS
+
+
+def is_component_sized_file(filename):
+    lower = filename.lower()
+    return lower.endswith(COMPONENT_SCRIPT_SUFFIXES) or lower.endswith(COMPONENT_TEMPLATE_SUFFIXES)
+
 
 # ---------------------------------------------------------------------------
 # Color utilities (WCAG 2.1 contrast)
@@ -259,34 +301,34 @@ def load_from_url(url):
 
 
 def load_from_path(path):
-    """Walk a directory for HTML/CSS/JSX/TSX/Vue/Svelte files."""
+    """Walk a directory for HTML/CSS/component-template files."""
     html_parts, css_parts = [], []
-    exts_html = {".html", ".htm", ".jsx", ".tsx", ".vue", ".svelte"}
-    exts_css = {".css", ".scss", ".sass", ".less"}
     n_files = 0
     for root, _, files in os.walk(path):
-        if any(
-            skip in root for skip in ("/node_modules/", "/.git/", "/dist/", "/build/", "/.next/")
-        ):
+        if any(skip in root for skip in SKIP_DIR_FRAGMENTS):
             continue
         for f in files:
             fp = os.path.join(root, f)
-            ext = os.path.splitext(f)[1].lower()
-            if ext in exts_html or ext in exts_css:
-                try:
-                    with open(fp, encoding="utf-8", errors="replace") as fh:
-                        content = fh.read()
-                except OSError:
-                    continue
-                n_files += 1
-                if ext in exts_html:
-                    html_parts.append(content)
-                    for m in re.finditer(
-                        r"<style[^>]*>(.*?)</style>", content, re.DOTALL | re.IGNORECASE
-                    ):
-                        css_parts.append(m.group(1))
-                else:
-                    css_parts.append(content)
+            try:
+                with open(fp, encoding="utf-8", errors="replace") as fh:
+                    content = fh.read()
+            except OSError:
+                continue
+
+            markup = is_markup_file(f, content)
+            style = is_style_file(f)
+            if not (markup or style):
+                continue
+
+            n_files += 1
+            if markup:
+                html_parts.append(content)
+                for m in re.finditer(
+                    r"<style[^>]*>(.*?)</style>", content, re.DOTALL | re.IGNORECASE
+                ):
+                    css_parts.append(m.group(1))
+            else:
+                css_parts.append(content)
     return {
         "html": "\n\n".join(html_parts),
         "css": "\n\n".join(css_parts),
@@ -1478,19 +1520,16 @@ def check_components(html, source):
             }
         )
 
-    # Oversize JSX/TSX components (only in --path mode)
+    # Oversize component/template files (only in --path mode)
     oversize_components = []
     heavy_prop_components = []
     path = source.get("source") if source.get("source_type") == "path" else None
     if path and os.path.isdir(path):
         for root, _, files in os.walk(path):
-            if any(
-                skip in root
-                for skip in ("/node_modules/", "/.git/", "/dist/", "/build/", "/.next/")
-            ):
+            if any(skip in root for skip in SKIP_DIR_FRAGMENTS):
                 continue
             for f in files:
-                if not f.endswith((".jsx", ".tsx", ".vue", ".svelte")):
+                if not is_component_sized_file(f):
                     continue
                 fp = os.path.join(root, f)
                 try:
@@ -1506,27 +1545,28 @@ def check_components(html, source):
                             "lines": lines,
                         }
                     )
-                # Heavy props: a function/arrow component destructuring 10+ props
-                for m in re.finditer(
-                    r"(?:function|const)\s+\w+\s*=?\s*(?:\([^)]*\)\s*=>\s*)?"
-                    r"\(\s*\{([^}]{150,})\}",
-                    content,
-                ):
-                    props = [p.strip() for p in m.group(1).split(",") if p.strip()]
-                    if len(props) >= 10:
-                        heavy_prop_components.append(
-                            {
-                                "file": os.path.relpath(fp, path),
-                                "prop_count": len(props),
-                            }
-                        )
-                        break
+                # Heavy props: only meaningful for JS component files.
+                if f.lower().endswith(COMPONENT_SCRIPT_SUFFIXES):
+                    for m in re.finditer(
+                        r"(?:function|const)\s+\w+\s*=?\s*(?:\([^)]*\)\s*=>\s*)?"
+                        r"\(\s*\{([^}]{150,})\}",
+                        content,
+                    ):
+                        props = [p.strip() for p in m.group(1).split(",") if p.strip()]
+                        if len(props) >= 10:
+                            heavy_prop_components.append(
+                                {
+                                    "file": os.path.relpath(fp, path),
+                                    "prop_count": len(props),
+                                }
+                            )
+                            break
 
     oversize_components.sort(key=lambda x: -x["lines"])
     if oversize_components:
         findings.append(
             {
-                "issue": f"{len(oversize_components)} component file(s) over 300 lines",
+                "issue": f"{len(oversize_components)} component/template file(s) over 300 lines",
                 "severity": "medium",
                 "note": "Oversize components usually do several jobs. Split by concern (container/presenter, or by sub-feature).",
             }

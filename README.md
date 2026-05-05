@@ -104,6 +104,22 @@ Trello board health audit. Queries five dimensions of card data to identify thro
 /audit-trello board="My Board" since=2024-07-01
 ```
 
+### `/onepager`
+
+Generate a self-contained single-file HTML demo or presentation using Alpine.js + Tailwind via CDN. Emailable, double-clickable, no build step. Aimed at business and marketing users putting an interactive thing in front of a stakeholder without booking engineering — the agent makes all edits, the user only opens the file in a browser.
+
+Ships with four reference patterns the skill draws on: a baseline list-with-details demo, a KPI dashboard with a coaching-mark tour (spotlight overlay, `$persist`-backed "tour seen" state), a keyboard-driven slide deck with five layouts (cover, bullets, metric, quote, code), and a simulated-AI inbox with thinking-step trace and word-by-word streaming.
+
+**Arguments:** None — drop a topic in natural language and the skill produces the file.
+
+**Usage:**
+```
+/onepager a demo of our pricing tiers
+/onepager Q1 business review slide deck
+/onepager walkthrough of our onboarding flow with coaching marks
+/onepager a simulated AI assistant for support triage
+```
+
 ### `/harness`
 
 > **⚠️ WIP — not ready for use.** This skill is under active development and is not yet stable. Don't install it on a setup you care about.
@@ -126,22 +142,6 @@ Builds on [OpenAI's harness-engineering article](https://openai.com/index/harnes
 /harness snapshot
 /harness status
 /harness audit              # prep a monthly remote routine
-```
-
-### `/onepager`
-
-Generate a self-contained single-file HTML demo or presentation using Alpine.js + Tailwind via CDN. Emailable, double-clickable, no build step. Aimed at business and marketing users putting an interactive thing in front of a stakeholder without booking engineering — the agent makes all edits, the user only opens the file in a browser.
-
-Ships with four reference patterns the skill draws on: a baseline list-with-details demo, a KPI dashboard with a coaching-mark tour (spotlight overlay, `$persist`-backed "tour seen" state), a keyboard-driven slide deck with five layouts (cover, bullets, metric, quote, code), and a simulated-AI inbox with thinking-step trace and word-by-word streaming.
-
-**Arguments:** None — drop a topic in natural language and the skill produces the file.
-
-**Usage:**
-```
-/onepager a demo of our pricing tiers
-/onepager Q1 business review slide deck
-/onepager walkthrough of our onboarding flow with coaching marks
-/onepager a simulated AI assistant for support triage
 ```
 
 ## Other skills I like

@@ -1,0 +1,560 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Revenue OS — Guided Tour Demo</title>
+
+  <!-- Tailwind via Play CDN; Alpine v3 with defer so it waits for the DOM.
+       The persist plugin loads first (defer preserves order) so $persist
+       is available inside x-data. -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://unpkg.com/@alpinejs/persist@3.14.1/dist/cdn.min.js"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.14.1/dist/cdn.min.js"></script>
+
+  <style>
+    [x-cloak] { display: none !important; }
+    body { font-feature-settings: 'ss01', 'cv11'; }
+
+    /*
+      Spotlight trick: a fixed-position rectangle with a giant outset
+      box-shadow dims everything outside it. Crisper and cheaper than an
+      SVG mask, and it animates between targets just by mutating top/left
+      /width/height.
+    */
+    .spotlight {
+      position: fixed;
+      box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.72);
+      border-radius: 12px;
+      pointer-events: none;
+      transition: top 280ms ease, left 280ms ease, width 280ms ease, height 280ms ease;
+      z-index: 60;
+    }
+    .coach-card {
+      position: fixed;
+      width: 320px;
+      z-index: 70;
+      transition: top 280ms ease, left 280ms ease;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 antialiased">
+
+<!--
+  THE WHOLE APP LIVES IN ONE x-data BLOCK.
+  Note for editors: this attribute is HTML double-quoted, so any literal "
+  inside would close it. Strings below use apostrophes; SVG/HTML strings
+  built dynamically use template literals with single quotes inside.
+-->
+<div
+  x-cloak
+  x-data="{
+    /* --- Time range filter --- */
+    range: '30d',
+    ranges: [
+      { id: '7d',  label: '7 days' },
+      { id: '30d', label: '30 days' },
+      { id: '90d', label: '90 days' },
+      { id: 'ytd', label: 'YTD' }
+    ],
+
+    /* --- KPI snapshots per range. Pre-baked so the demo stays predictable. --- */
+    kpiData: {
+      '7d':  { revenue:  184320, dr:  4.1, mrr: 92140, dm:  1.8, churn: 1.2, dc: -0.3, arpa: 412, da: 0.8, spark: [62,68,71,73,70,76,82] },
+      '30d': { revenue:  742980, dr: 12.4, mrr: 95230, dm:  6.2, churn: 1.6, dc: -0.2, arpa: 428, da: 2.1, spark: [54,58,62,68,72,69,75,80,82,88,90,92] },
+      '90d': { revenue: 2150400, dr: 18.7, mrr: 95230, dm: 11.3, churn: 1.9, dc:  0.1, arpa: 428, da: 4.2, spark: [40,42,48,52,55,60,65,68,72,78,82,86,89,92] },
+      'ytd': { revenue: 6182550, dr: 22.4, mrr: 95230, dm: 14.1, churn: 2.1, dc:  0.4, arpa: 428, da: 7.6, spark: [30,35,42,50,58,68,75,82,86,90,92,95,98] }
+    },
+
+    /* --- Customer accounts. Mix of healthy, at-risk, churned. --- */
+    customers: [
+      { id: 1,  name: 'Northwind Logistics',  plan: 'Enterprise', mrr: 12400, status: 'healthy', stage: 'Expansion', lastSeen: '2h ago' },
+      { id: 2,  name: 'Helios Manufacturing', plan: 'Enterprise', mrr:  9800, status: 'at-risk', stage: 'Renewal',   lastSeen: '6d ago' },
+      { id: 3,  name: 'Kepler Insurance',     plan: 'Enterprise', mrr:  8400, status: 'healthy', stage: 'Live',      lastSeen: '3d ago' },
+      { id: 4,  name: 'Forge Capital',        plan: 'Pro',        mrr:  4200, status: 'healthy', stage: 'Live',      lastSeen: '1h ago' },
+      { id: 5,  name: 'Bramble & Co',         plan: 'Pro',        mrr:  3850, status: 'healthy', stage: 'Live',      lastSeen: '4h ago' },
+      { id: 6,  name: 'Tinder Logistics',     plan: 'Pro',        mrr:  3450, status: 'healthy', stage: 'Live',      lastSeen: '5h ago' },
+      { id: 7,  name: 'Cobalt Studios',       plan: 'Pro',        mrr:  3100, status: 'healthy', stage: 'Live',      lastSeen: '11m ago' },
+      { id: 8,  name: 'Dune Robotics',        plan: 'Pro',        mrr:  2800, status: 'at-risk', stage: 'Renewal',   lastSeen: '9d ago' },
+      { id: 9,  name: 'Ridge Outdoor',        plan: 'Starter',    mrr:   980, status: 'healthy', stage: 'Live',      lastSeen: '32m ago' },
+      { id: 10, name: 'Quill Media',          plan: 'Starter',    mrr:   890, status: 'churn',   stage: 'Cancelled', lastSeen: '14d ago' }
+    ],
+
+    /* --- Pipeline stages --- */
+    pipeline: [
+      { stage: 'Discovery',   count: 18, value:  480000, color: '#94a3b8' },
+      { stage: 'Pilot',       count: 12, value:  720000, color: '#60a5fa' },
+      { stage: 'Negotiation', count:  7, value: 1240000, color: '#a78bfa' },
+      { stage: 'Closed Won',  count:  4, value:  510000, color: '#34d399' }
+    ],
+
+    /* --- Table state --- */
+    search: '',
+    sortBy: 'mrr',
+    sortDir: 'desc',
+    selected: null,
+
+    /* --- Tour state ---
+       Each step targets an element via data-tour='id', with a placement
+       hint and an optional autoSelect that opens the drawer on a specific
+       customer before measuring.
+
+       tourSeen is persisted in localStorage via the @alpinejs/persist
+       plugin, so first-time visitors get the tour automatically and
+       returning visitors do not. The 'Take a tour' button always works. */
+    tour: { active: false, step: 0 },
+    tourSeen: $persist(false).as('revenue-os.tourSeen'),
+    tourSteps: [
+      { target: 'header',     title: 'Welcome to Revenue OS', body: 'Six quick stops to find your way around the dashboard. Use the buttons or the arrow keys.', placement: 'bottom' },
+      { target: 'range',      title: 'Time range',            body: 'Every metric on this page reacts to this filter. Switch periods to see how trends shift.', placement: 'bottom' },
+      { target: 'kpis',       title: 'Headline metrics',      body: 'Revenue, new MRR, churn, and ARPA. Each card shows the delta against the previous period.', placement: 'bottom' },
+      { target: 'customers',  title: 'Top accounts',          body: 'Accounts ranked by MRR. Search by name or plan, sort columns, click a row for the drawer.', placement: 'top' },
+      { target: 'customer-2', title: 'Drill into an account', body: 'Helios is at risk: 6 days quiet and sitting in renewal. Open the drawer to see the activity trail.', placement: 'top', autoSelect: 2 },
+      { target: 'drawer',     title: 'Account health',        body: 'Recent touchpoints, plan, and a one-click handoff to the assigned CSM.', placement: 'left' },
+      { target: 'pipeline',   title: 'Pipeline coverage',     body: 'Open deals by stage. Bar height encodes total value, the count badge shows how many.', placement: 'left' }
+    ],
+    bbox: null,
+
+    /* --- Computed (getters re-run when their reactive deps change) --- */
+    get current() { return this.kpiData[this.range]; },
+    get currentStep() { return this.tourSteps[this.tour.step] || null; },
+    get filtered() {
+      const q = this.search.trim().toLowerCase();
+      const dir = this.sortDir === 'asc' ? 1 : -1;
+      return this.customers
+        .filter(c => !q || c.name.toLowerCase().includes(q) || c.plan.toLowerCase().includes(q))
+        .sort((a, b) => {
+          const va = a[this.sortBy], vb = b[this.sortBy];
+          return (typeof va === 'string' ? va.localeCompare(vb) : va - vb) * dir;
+        });
+    },
+    get pipelineMax() { return Math.max(...this.pipeline.map(p => p.value)); },
+    get activity() {
+      if (!this.selected) return [];
+      const c = this.selected;
+      if (c.status === 'at-risk') return [
+        { when: c.lastSeen,  tag: 'Login',   detail: 'No active sessions in the last 6 days.' },
+        { when: '4d ago',    tag: 'Support', detail: 'Filed P2 ticket about API rate limits.' },
+        { when: '8d ago',    tag: 'Renewal', detail: 'Procurement requested a 20% discount.' },
+        { when: '21d ago',   tag: 'NPS',     detail: 'Detractor — flagged onboarding friction.' }
+      ];
+      if (c.status === 'churn') return [
+        { when: c.lastSeen,  tag: 'Cancel',  detail: 'Workspace downgraded to free tier.' },
+        { when: '18d ago',   tag: 'Email',   detail: 'CFO declined renewal quote.' },
+        { when: '34d ago',   tag: 'Support', detail: 'Escalation about export limits.' }
+      ];
+      return [
+        { when: c.lastSeen, tag: 'Login',   detail: 'Active workspace, 4 seats used today.' },
+        { when: '2d ago',   tag: 'Invoice', detail: 'Paid ' + this.money(c.mrr) + ' for ' + c.plan + ' plan.' },
+        { when: '5d ago',   tag: 'QBR',     detail: 'Quarterly review scheduled with Sam Patel.' },
+        { when: '12d ago',  tag: 'Feature', detail: 'Enabled SSO and audit log exports.' }
+      ];
+    },
+
+    /* --- Format helpers --- */
+    money(n)      { return '$' + n.toLocaleString(); },
+    moneyShort(n) {
+      if (n >= 1e6) return '$' + (n/1e6).toFixed(2) + 'M';
+      if (n >= 1e3) return '$' + (n/1e3).toFixed(1) + 'k';
+      return '$' + n;
+    },
+    pct(n)        { return (n > 0 ? '+' : '') + n.toFixed(1) + '%'; },
+    sparkPoints(arr) {
+      if (!arr || !arr.length) return '';
+      const max = Math.max(...arr), min = Math.min(...arr), span = max - min || 1;
+      return arr.map((v, i) =>
+        (i / (arr.length - 1) * 100).toFixed(2) + ',' + (28 - (v - min) / span * 26).toFixed(2)
+      ).join(' ');
+    },
+    statusClass(s) {
+      return s === 'healthy' ? 'bg-emerald-100 text-emerald-700'
+           : s === 'at-risk' ? 'bg-amber-100 text-amber-700'
+                             : 'bg-rose-100 text-rose-700';
+    },
+    sortToggle(col) {
+      if (this.sortBy === col) {
+        this.sortDir = this.sortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        this.sortBy = col;
+        this.sortDir = col === 'name' ? 'asc' : 'desc';
+      }
+    },
+
+    /* --- Tour controls --- */
+    startTour() { this.tour.active = true; this.tour.step = 0; this.applyStep(); },
+    endTour()   { this.tour.active = false; this.bbox = null; this.tourSeen = true; },
+    resetTour() { this.tourSeen = false; this.startTour(); },
+    nextStep()  {
+      if (this.tour.step >= this.tourSteps.length - 1) return this.endTour();
+      this.tour.step++; this.applyStep();
+    },
+    prevStep()  { if (this.tour.step > 0) { this.tour.step--; this.applyStep(); } },
+    applyStep() {
+      const s = this.currentStep;
+      if (!s) return;
+      if (s.autoSelect != null) {
+        this.selected = this.customers.find(c => c.id === s.autoSelect) || null;
+      }
+      this.$nextTick(() => this.measureTarget());
+    },
+    measureTarget() {
+      const s = this.currentStep;
+      if (!s) { this.bbox = null; return; }
+      const el = document.querySelector('[data-tour=' + s.target + ']');
+      if (!el) { this.bbox = null; return; }
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      requestAnimationFrame(() => {
+        const r = el.getBoundingClientRect();
+        this.bbox = { top: r.top, left: r.left, width: r.width, height: r.height };
+      });
+    },
+    get spotlightStyle() {
+      if (!this.bbox) return 'display:none';
+      const pad = 8;
+      return 'top:' + (this.bbox.top - pad) + 'px;' +
+             'left:' + (this.bbox.left - pad) + 'px;' +
+             'width:' + (this.bbox.width + pad*2) + 'px;' +
+             'height:' + (this.bbox.height + pad*2) + 'px;';
+    },
+    get tooltipStyle() {
+      if (!this.bbox || !this.currentStep) return 'display:none';
+      const m = 18, b = this.bbox, p = this.currentStep.placement;
+      if (p === 'top')   return 'top:' + (b.top - m) + 'px;left:' + (b.left + b.width/2) + 'px;transform:translate(-50%,-100%);';
+      if (p === 'left')  return 'top:' + (b.top + b.height/2) + 'px;left:' + (b.left - m) + 'px;transform:translate(-100%,-50%);';
+      if (p === 'right') return 'top:' + (b.top + b.height/2) + 'px;left:' + (b.left + b.width + m) + 'px;transform:translate(0,-50%);';
+      return                 'top:' + (b.top + b.height + m) + 'px;left:' + (b.left + b.width/2) + 'px;transform:translate(-50%,0);';
+    },
+
+    /* Re-measure on scroll/resize so the spotlight tracks its target. */
+    init() {
+      const remeasure = () => { if (this.tour.active) this.measureTarget(); };
+      window.addEventListener('resize', remeasure);
+      window.addEventListener('scroll', remeasure, { passive: true });
+      window.addEventListener('keydown', (e) => {
+        if (!this.tour.active) return;
+        if (e.key === 'Escape')       this.endTour();
+        if (e.key === 'ArrowRight')   this.nextStep();
+        if (e.key === 'ArrowLeft')    this.prevStep();
+        if (e.key === 'Enter')        this.nextStep();
+      });
+      /* First-time visitors get the tour automatically, after a short pause
+         so the layout settles. Returning visitors land on the dashboard
+         directly and can replay the tour from the button if they want. */
+      if (!this.tourSeen) setTimeout(() => this.startTour(), 600);
+    }
+  }"
+  class="mx-auto max-w-7xl px-6 py-8"
+>
+
+  <!-- HEADER -->
+  <header data-tour="header" class="flex items-center justify-between gap-4 flex-wrap mb-6">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-lg bg-slate-900 text-white grid place-items-center font-semibold">R</div>
+      <div>
+        <h1 class="text-xl font-semibold tracking-tight">Revenue OS</h1>
+        <p class="text-sm text-slate-500">Welcome back — here's how the book is doing.</p>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-3">
+      <!-- Time range pills. Each pill toggles `range`. -->
+      <div data-tour="range" class="inline-flex bg-white rounded-md border border-slate-300 p-1 text-sm">
+        <template x-for="r in ranges" :key="r.id">
+          <button
+            @click="range = r.id"
+            :class="range === r.id ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'"
+            class="px-3 py-1 rounded transition"
+            x-text="r.label"
+          ></button>
+        </template>
+      </div>
+      <button
+        data-tour="tour-button"
+        @click="startTour()"
+        class="text-sm px-3 py-2 rounded-md bg-slate-900 text-white hover:bg-slate-800 transition"
+        x-text="tourSeen ? 'Replay tour' : 'Take a tour'"
+      ></button>
+    </div>
+  </header>
+
+  <!-- KPI STRIP -->
+  <section data-tour="kpis" class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+    <!-- Revenue -->
+    <div class="bg-white rounded-lg border border-slate-200 p-4">
+      <p class="text-xs uppercase tracking-wide text-slate-500">Revenue</p>
+      <p class="text-2xl font-semibold tabular-nums mt-1" x-text="moneyShort(current.revenue)"></p>
+      <p class="text-xs mt-1" :class="current.dr >= 0 ? 'text-emerald-600' : 'text-rose-600'">
+        <span x-text="pct(current.dr)"></span>
+        <span class="text-slate-400">vs prior period</span>
+      </p>
+      <svg viewBox="0 0 100 30" class="w-full h-8 mt-3 text-emerald-500" preserveAspectRatio="none">
+        <polyline :points="sparkPoints(current.spark)" fill="none" stroke="currentColor" stroke-width="1.5"/>
+      </svg>
+    </div>
+
+    <!-- New MRR -->
+    <div class="bg-white rounded-lg border border-slate-200 p-4">
+      <p class="text-xs uppercase tracking-wide text-slate-500">New MRR</p>
+      <p class="text-2xl font-semibold tabular-nums mt-1" x-text="moneyShort(current.mrr)"></p>
+      <p class="text-xs mt-1" :class="current.dm >= 0 ? 'text-emerald-600' : 'text-rose-600'">
+        <span x-text="pct(current.dm)"></span>
+        <span class="text-slate-400">vs prior period</span>
+      </p>
+      <div class="mt-3 flex items-end gap-1 h-8">
+        <template x-for="(v, i) in current.spark" :key="i">
+          <div class="flex-1 bg-blue-200 rounded-sm" :style="'height:' + (v/100 * 100) + '%'"></div>
+        </template>
+      </div>
+    </div>
+
+    <!-- Churn -->
+    <div class="bg-white rounded-lg border border-slate-200 p-4">
+      <p class="text-xs uppercase tracking-wide text-slate-500">Net churn</p>
+      <p class="text-2xl font-semibold tabular-nums mt-1" x-text="current.churn.toFixed(1) + '%'"></p>
+      <p class="text-xs mt-1" :class="current.dc <= 0 ? 'text-emerald-600' : 'text-rose-600'">
+        <span x-text="pct(current.dc)"></span>
+        <span class="text-slate-400">vs prior period</span>
+      </p>
+      <p class="mt-4 text-xs text-slate-500">Lower is better. Targeting under 2.0%.</p>
+    </div>
+
+    <!-- ARPA -->
+    <div class="bg-white rounded-lg border border-slate-200 p-4">
+      <p class="text-xs uppercase tracking-wide text-slate-500">ARPA</p>
+      <p class="text-2xl font-semibold tabular-nums mt-1" x-text="money(current.arpa)"></p>
+      <p class="text-xs mt-1" :class="current.da >= 0 ? 'text-emerald-600' : 'text-rose-600'">
+        <span x-text="pct(current.da)"></span>
+        <span class="text-slate-400">vs prior period</span>
+      </p>
+      <p class="mt-4 text-xs text-slate-500">Average revenue per account, all plans.</p>
+    </div>
+  </section>
+
+  <!-- MAIN GRID -->
+  <section class="grid grid-cols-1 lg:grid-cols-5 gap-6">
+
+    <!-- LEFT: customer table -->
+    <div data-tour="customers" class="lg:col-span-3 bg-white rounded-lg border border-slate-200">
+      <div class="p-4 flex items-center justify-between gap-3 border-b border-slate-200">
+        <div>
+          <h2 class="font-semibold tracking-tight">Top accounts</h2>
+          <p class="text-xs text-slate-500" x-text="filtered.length + ' of ' + customers.length + ' shown'"></p>
+        </div>
+        <input
+          type="search"
+          x-model="search"
+          placeholder="Search name or plan…"
+          class="text-sm rounded-md border border-slate-300 px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+        >
+      </div>
+
+      <table class="w-full text-sm">
+        <thead class="text-xs uppercase text-slate-500 bg-slate-50">
+          <tr>
+            <th class="text-left px-4 py-2 font-medium cursor-pointer" @click="sortToggle('name')">
+              Account
+              <span x-show="sortBy === 'name'" x-text="sortDir === 'asc' ? '↑' : '↓'"></span>
+            </th>
+            <th class="text-left px-4 py-2 font-medium">Plan</th>
+            <th class="text-right px-4 py-2 font-medium cursor-pointer" @click="sortToggle('mrr')">
+              MRR
+              <span x-show="sortBy === 'mrr'" x-text="sortDir === 'asc' ? '↑' : '↓'"></span>
+            </th>
+            <th class="text-left px-4 py-2 font-medium">Status</th>
+            <th class="text-left px-4 py-2 font-medium hidden md:table-cell">Last seen</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="c in filtered" :key="c.id">
+            <tr
+              :data-tour="'customer-' + c.id"
+              @click="selected = c"
+              :class="selected && selected.id === c.id ? 'bg-slate-50' : 'hover:bg-slate-50'"
+              class="border-t border-slate-100 cursor-pointer"
+            >
+              <td class="px-4 py-3 font-medium" x-text="c.name"></td>
+              <td class="px-4 py-3 text-slate-600" x-text="c.plan"></td>
+              <td class="px-4 py-3 text-right tabular-nums" x-text="money(c.mrr)"></td>
+              <td class="px-4 py-3">
+                <span class="text-xs px-2 py-0.5 rounded-full" :class="statusClass(c.status)" x-text="c.status"></span>
+              </td>
+              <td class="px-4 py-3 text-slate-500 hidden md:table-cell" x-text="c.lastSeen"></td>
+            </tr>
+          </template>
+          <tr x-show="filtered.length === 0">
+            <td colspan="5" class="px-4 py-10 text-center text-slate-500">No accounts match that filter.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- RIGHT: pipeline -->
+    <aside data-tour="pipeline" class="lg:col-span-2 bg-white rounded-lg border border-slate-200 p-4">
+      <div class="flex items-baseline justify-between mb-3">
+        <h2 class="font-semibold tracking-tight">Pipeline</h2>
+        <span class="text-xs text-slate-500 tabular-nums" x-text="pipeline.reduce((s,p) => s + p.count, 0) + ' open'"></span>
+      </div>
+      <ul class="space-y-3">
+        <template x-for="p in pipeline" :key="p.stage">
+          <li>
+            <div class="flex items-baseline justify-between text-sm mb-1">
+              <span class="font-medium" x-text="p.stage"></span>
+              <span class="tabular-nums text-slate-700" x-text="moneyShort(p.value)"></span>
+            </div>
+            <div class="h-2 rounded-full bg-slate-100 overflow-hidden">
+              <div
+                class="h-full rounded-full"
+                :style="'width:' + (p.value / pipelineMax * 100) + '%; background-color:' + p.color"
+              ></div>
+            </div>
+            <p class="text-xs text-slate-500 mt-1" x-text="p.count + ' deals'"></p>
+          </li>
+        </template>
+      </ul>
+      <div class="mt-5 pt-4 border-t border-slate-100 text-xs text-slate-500">
+        Forecast coverage: <span class="font-medium text-slate-700 tabular-nums">3.2× quota</span>
+      </div>
+    </aside>
+  </section>
+
+  <!-- DRAWER (slides in from the right when an account is selected) -->
+  <div
+    x-show="selected"
+    @click.self="selected = null"
+    x-transition.opacity
+    class="fixed inset-0 bg-slate-900/30 z-40"
+  ></div>
+  <aside
+    data-tour="drawer"
+    x-show="selected"
+    x-transition:enter="transition ease-out duration-300"
+    x-transition:enter-start="translate-x-full"
+    x-transition:enter-end="translate-x-0"
+    x-transition:leave="transition ease-in duration-200"
+    x-transition:leave-start="translate-x-0"
+    x-transition:leave-end="translate-x-full"
+    class="fixed top-0 right-0 h-full w-full sm:w-[420px] bg-white z-50 border-l border-slate-200 overflow-y-auto"
+  >
+    <template x-if="selected">
+      <div class="p-6">
+        <div class="flex items-start justify-between mb-4">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-lg bg-slate-900 text-white grid place-items-center font-semibold"
+                 x-text="selected.name.split(' ').map(w => w[0]).join('').slice(0,2)"></div>
+            <div>
+              <h3 class="font-semibold tracking-tight" x-text="selected.name"></h3>
+              <p class="text-sm text-slate-500">
+                <span x-text="selected.plan"></span>
+                <span class="mx-1.5 text-slate-300">·</span>
+                <span x-text="selected.stage"></span>
+              </p>
+            </div>
+          </div>
+          <button @click="selected = null" class="text-slate-400 hover:text-slate-700" aria-label="Close">&times;</button>
+        </div>
+
+        <div class="grid grid-cols-3 gap-3 mb-5">
+          <div class="bg-slate-50 rounded-md p-3">
+            <p class="text-xs text-slate-500">MRR</p>
+            <p class="font-semibold tabular-nums" x-text="money(selected.mrr)"></p>
+          </div>
+          <div class="bg-slate-50 rounded-md p-3">
+            <p class="text-xs text-slate-500">Status</p>
+            <p class="font-semibold capitalize" x-text="selected.status"></p>
+          </div>
+          <div class="bg-slate-50 rounded-md p-3">
+            <p class="text-xs text-slate-500">Last seen</p>
+            <p class="font-semibold" x-text="selected.lastSeen"></p>
+          </div>
+        </div>
+
+        <h4 class="text-xs uppercase tracking-wide text-slate-500 mb-2">Recent activity</h4>
+        <ol class="space-y-3 mb-5">
+          <template x-for="(a, i) in activity" :key="i">
+            <li class="flex gap-3">
+              <div class="w-1.5 mt-1.5 h-1.5 rounded-full bg-slate-400 shrink-0"></div>
+              <div class="min-w-0 flex-1">
+                <div class="flex items-baseline justify-between gap-2">
+                  <span class="text-xs font-medium uppercase tracking-wide text-slate-500" x-text="a.tag"></span>
+                  <span class="text-xs text-slate-400" x-text="a.when"></span>
+                </div>
+                <p class="text-sm text-slate-700" x-text="a.detail"></p>
+              </div>
+            </li>
+          </template>
+        </ol>
+
+        <div class="flex gap-2">
+          <button class="flex-1 text-sm px-3 py-2 rounded-md bg-slate-900 text-white hover:bg-slate-800 transition">
+            Open in CRM
+          </button>
+          <button class="flex-1 text-sm px-3 py-2 rounded-md border border-slate-300 hover:bg-slate-100 transition">
+            Schedule QBR
+          </button>
+        </div>
+      </div>
+    </template>
+  </aside>
+
+  <footer class="mt-10 text-xs text-slate-400">
+    Self-contained Alpine.js + Tailwind demo. The tour overlay is one
+    fixed-position spotlight plus a coaching card; both reposition by
+    measuring <code class="text-slate-500">getBoundingClientRect</code> on
+    the active step's <code class="text-slate-500">data-tour</code> target.
+  </footer>
+
+  <!-- COACHING-MARK OVERLAY -->
+  <!-- Spotlight: dims the page everywhere except the target rectangle. -->
+  <div class="spotlight" x-show="tour.active && bbox" :style="spotlightStyle"></div>
+
+  <!-- Click trap: catches clicks outside the spotlight while the tour is on
+       so the underlying UI doesn't react. The spotlight has pointer-events
+       none, so this trap fills the rest of the viewport. -->
+  <div
+    x-show="tour.active"
+    x-transition.opacity
+    @click="endTour()"
+    class="fixed inset-0 z-50"
+    style="background: transparent"
+  ></div>
+
+  <!-- Coaching card: title, body, controls, step counter. -->
+  <div
+    x-show="tour.active && bbox"
+    x-transition:enter="transition ease-out duration-200"
+    x-transition:enter-start="opacity-0 scale-95"
+    x-transition:enter-end="opacity-100 scale-100"
+    @click.stop
+    class="coach-card bg-white rounded-lg shadow-2xl border border-slate-200 p-5"
+    :style="tooltipStyle"
+  >
+    <template x-if="currentStep">
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-medium uppercase tracking-wide text-slate-500"
+                x-text="(tour.step + 1) + ' / ' + tourSteps.length"></span>
+          <button @click="endTour()" class="text-slate-400 hover:text-slate-700 text-sm" aria-label="Skip tour">Skip</button>
+        </div>
+        <h3 class="font-semibold tracking-tight text-slate-900 mb-1" x-text="currentStep.title"></h3>
+        <p class="text-sm text-slate-600 mb-4" x-text="currentStep.body"></p>
+        <div class="flex items-center justify-between gap-2">
+          <button
+            @click="prevStep()"
+            :disabled="tour.step === 0"
+            :class="tour.step === 0 ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-100'"
+            class="text-sm px-3 py-1.5 rounded-md border border-slate-300 transition"
+          >Back</button>
+          <button
+            @click="nextStep()"
+            class="text-sm px-3 py-1.5 rounded-md bg-slate-900 text-white hover:bg-slate-800 transition"
+            x-text="tour.step === tourSteps.length - 1 ? 'Done' : 'Next'"
+          ></button>
+        </div>
+      </div>
+    </template>
+  </div>
+
+</div>
+
+</body>
+</html>

@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Q1 Business Review — Slide Deck</title>
+
+  <!-- Tailwind via Play CDN; Alpine v3 with defer. -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.14.1/dist/cdn.min.js"></script>
+
+  <style>
+    [x-cloak] { display: none !important; }
+    body { font-feature-settings: 'ss01', 'cv11'; }
+    /* Fixed-aspect slide stage so things look the same across screen sizes. */
+    .stage {
+      width: min(96vw, 1280px);
+      aspect-ratio: 16 / 10;
+      max-height: 88vh;
+    }
+    /* Subtle entrance animation between slides. */
+    @keyframes slide-in { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
+    .slide-anim { animation: slide-in 280ms ease both; }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-900 antialiased">
+
+<!--
+  Slide-deck pattern from the onepager skill.
+  - One slide visible at a time, indexed by `slide`.
+  - Arrow keys / Space advance, ←/Backspace retreat, Home/End jump.
+  - `n` toggles speaker notes, `f` toggles a fullscreen mode that hides chrome.
+  - All slides live in the `slides` array; render branches on slide.type.
+-->
+<div
+  x-cloak
+  x-data="{
+    slide: 0,
+    fullscreen: false,
+    showNotes: false,
+
+    slides: [
+      {
+        type: 'cover',
+        eyebrow: 'Q1 Business Review',
+        title: 'Revenue OS',
+        subtitle: 'Where the book is, where it is going, and the calls we need',
+        meta: 'May 2026 · Prepared for the leadership team',
+        notes: 'Set context: this is the first deep-dive of the year. Keep it 25 minutes plus questions. Tomás and Priya are dialled in for the Helios slide.'
+      },
+      {
+        type: 'bullets',
+        eyebrow: 'Section one',
+        title: 'Headline numbers',
+        bullets: [
+          'Revenue $743k for the period — up 12.4% on Q4',
+          'Net new MRR $95.2k — second-best quarter on record',
+          'Net churn held at 1.6% (target was 2.0%)',
+          'ARPA up to $428, lifted by two enterprise expansions'
+        ],
+        notes: 'Lead with the wins, but flag that ARPA growth is concentrated in 2 accounts. If either churns the headline falls 4 points.'
+      },
+      {
+        type: 'metric',
+        eyebrow: 'Detail',
+        title: 'Where the growth came from',
+        metrics: [
+          { label: 'Net new logos',      value: '14', delta: '+3 vs Q4' },
+          { label: 'Expansion revenue',  value: '$58k', delta: 'Northwind +1 tier, Kepler +12 seats' },
+          { label: 'Reactivations',      value: '2',  delta: 'Forge, Bramble' },
+          { label: 'Avg deal size',      value: '$5.4k', delta: 'up 9%' }
+        ],
+        notes: 'Reactivations are a leading indicator — both came from the win-back campaign. Keep that programme funded.'
+      },
+      {
+        type: 'bullets',
+        eyebrow: 'Where we lost ground',
+        title: 'What did not work',
+        bullets: [
+          'Quill Media churned voluntarily — declined save call',
+          'Helios renewal at risk: 6 days quiet, procurement asking for 20% off',
+          'Two API outages drove the bulk of CSAT dips in March',
+          'Self-serve activation flat — investment in onboarding has not landed yet'
+        ],
+        notes: 'Do not gloss the API outages. Reliability is the renewal blocker for Northwind too. If we get one more in Q2 we should expect concession asks.'
+      },
+      {
+        type: 'quote',
+        eyebrow: 'Customer story',
+        attribution: 'Tomás Riveira · Helios Manufacturing',
+        quote: 'We are open to a multi-year deal if that helps. Send me a counter-proposal before Friday.',
+        body: 'Helios is the largest at-risk renewal in the book. AE has the counter; meeting Friday morning. We are modelling a flat two-year extension or a three-year deal with the price step deferred to year three.',
+        notes: 'Decision needed today: do we authorise the flat two-year? It is a $14k impact vs list price.'
+      },
+      {
+        type: 'code',
+        eyebrow: 'How we are tracking it',
+        title: 'New: account-health signal in the dashboard',
+        body: 'Mixes session activity, ticket sentiment, and renewal stage into a single score. Live in Revenue OS for two weeks.',
+        code: 'const health = (account) => {\n  const dormant  = daysSinceLogin(account) > 5 ? 1 : 0;\n  const tickets  = recentNegativeTickets(account, 30);\n  const renewing = renewalDaysOut(account) < 30 ? 1 : 0;\n  return clamp(100 - dormant*15 - tickets*10 - renewing*10, 0, 100);\n};',
+        notes: 'Already flagged Helios and Dune Robotics before either showed up in NPS. Do not over-rotate — the score is a prompt for a CSM call, not a verdict.'
+      },
+      {
+        type: 'bullets',
+        eyebrow: 'Looking forward',
+        title: 'Q2 priorities',
+        bullets: [
+          'Reliability: ship the rate-limit overhaul before the Northwind renewal',
+          'Helios: close the renewal at flat pricing, multi-year structure',
+          'Onboarding: rebuild the activation flow with coaching marks',
+          'Pricing: validate the new Business tier with three pilot accounts'
+        ],
+        notes: 'Each priority has a named owner and a Friday-of-each-week check-in slot. Pricing pilot list is in the appendix.'
+      },
+      {
+        type: 'cover',
+        eyebrow: 'Decisions needed',
+        title: 'Three asks before we leave the room',
+        subtitle: '1. Approve flat-pricing on Helios renewal.  2. Sign off on rate-limit overhaul scope.  3. Pick the three Business-tier pilots.',
+        meta: 'Thank you. Notes and recording in the shared drive after the call.',
+        notes: 'Hold the room until all three are decided. Do not let this slide into a follow-up email.'
+      }
+    ],
+
+    /* --- Computed --- */
+    get current() { return this.slides[this.slide]; },
+    get progress() { return ((this.slide + 1) / this.slides.length) * 100; },
+
+    /* --- Methods --- */
+    next()  { if (this.slide < this.slides.length - 1) this.slide++; },
+    prev()  { if (this.slide > 0) this.slide--; },
+    first() { this.slide = 0; },
+    last()  { this.slide = this.slides.length - 1; },
+
+    init() {
+      window.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight' || e.key === ' ') { this.next(); e.preventDefault(); }
+        if (e.key === 'ArrowLeft' || e.key === 'Backspace') { this.prev(); e.preventDefault(); }
+        if (e.key === 'Home') this.first();
+        if (e.key === 'End')  this.last();
+        if (e.key === 'n' || e.key === 'N') this.showNotes = !this.showNotes;
+        if (e.key === 'f' || e.key === 'F') this.fullscreen = !this.fullscreen;
+        if (e.key === 'Escape') { this.fullscreen = false; this.showNotes = false; }
+      });
+    }
+  }"
+  class="min-h-screen flex flex-col items-center"
+>
+
+  <!-- Progress bar pinned to the top of the viewport. -->
+  <div class="w-full h-1 bg-slate-200">
+    <div class="h-full bg-slate-900 transition-all duration-300" :style="'width:' + progress + '%'"></div>
+  </div>
+
+  <!-- Top chrome — hidden when fullscreen is on. -->
+  <header
+    x-show="!fullscreen"
+    x-transition.opacity
+    class="w-full max-w-7xl px-6 py-4 flex items-center justify-between"
+  >
+    <div class="flex items-center gap-3 text-sm text-slate-500">
+      <span class="w-2 h-2 rounded-full bg-slate-400"></span>
+      <span>Q1 Business Review</span>
+    </div>
+    <div class="flex items-center gap-2 text-xs text-slate-500">
+      <span>Press <kbd class="px-1.5 py-0.5 rounded bg-slate-200 text-slate-700">→</kbd> to advance</span>
+      <span class="text-slate-300">·</span>
+      <span><kbd class="px-1.5 py-0.5 rounded bg-slate-200 text-slate-700">n</kbd> notes</span>
+      <span class="text-slate-300">·</span>
+      <span><kbd class="px-1.5 py-0.5 rounded bg-slate-200 text-slate-700">f</kbd> hide chrome</span>
+    </div>
+  </header>
+
+  <!-- The slide stage. We re-mount the inner content when slide changes
+       (using :key on a wrapper) so the entrance animation runs each time. -->
+  <main class="flex-1 w-full flex items-center justify-center px-6 pb-6">
+    <div class="stage bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden flex">
+      <template :key="slide" x-if="current">
+        <div class="slide-anim flex-1 flex flex-col justify-center px-12 py-10">
+
+          <!-- Cover layout -->
+          <template x-if="current.type === 'cover'">
+            <div>
+              <p class="text-xs uppercase tracking-[0.2em] text-slate-500 mb-3" x-text="current.eyebrow"></p>
+              <h2 class="text-5xl font-semibold tracking-tight mb-4" x-text="current.title"></h2>
+              <p class="text-xl text-slate-700 mb-12 max-w-3xl leading-snug" x-text="current.subtitle"></p>
+              <p class="text-sm text-slate-500" x-text="current.meta"></p>
+            </div>
+          </template>
+
+          <!-- Bullets layout -->
+          <template x-if="current.type === 'bullets'">
+            <div>
+              <p class="text-xs uppercase tracking-[0.2em] text-slate-500 mb-2" x-text="current.eyebrow"></p>
+              <h2 class="text-4xl font-semibold tracking-tight mb-8" x-text="current.title"></h2>
+              <ul class="space-y-3 max-w-3xl">
+                <template x-for="(b, i) in current.bullets" :key="i">
+                  <li class="flex gap-3 text-lg text-slate-800 leading-relaxed">
+                    <span class="text-slate-400 tabular-nums" x-text="(i + 1).toString().padStart(2, '0')"></span>
+                    <span x-text="b"></span>
+                  </li>
+                </template>
+              </ul>
+            </div>
+          </template>
+
+          <!-- Metric layout -->
+          <template x-if="current.type === 'metric'">
+            <div>
+              <p class="text-xs uppercase tracking-[0.2em] text-slate-500 mb-2" x-text="current.eyebrow"></p>
+              <h2 class="text-4xl font-semibold tracking-tight mb-10" x-text="current.title"></h2>
+              <div class="grid grid-cols-2 gap-6 max-w-3xl">
+                <template x-for="m in current.metrics" :key="m.label">
+                  <div>
+                    <p class="text-xs uppercase tracking-wide text-slate-500 mb-1" x-text="m.label"></p>
+                    <p class="text-3xl font-semibold tabular-nums" x-text="m.value"></p>
+                    <p class="text-sm text-slate-600 mt-1" x-text="m.delta"></p>
+                  </div>
+                </template>
+              </div>
+            </div>
+          </template>
+
+          <!-- Quote layout -->
+          <template x-if="current.type === 'quote'">
+            <div>
+              <p class="text-xs uppercase tracking-[0.2em] text-slate-500 mb-3" x-text="current.eyebrow"></p>
+              <blockquote class="text-3xl font-medium tracking-tight leading-snug mb-6 max-w-3xl">
+                <span class="text-slate-300">“</span><span x-text="current.quote"></span><span class="text-slate-300">”</span>
+              </blockquote>
+              <p class="text-sm text-slate-500 mb-6" x-text="'— ' + current.attribution"></p>
+              <p class="text-base text-slate-700 max-w-2xl leading-relaxed" x-text="current.body"></p>
+            </div>
+          </template>
+
+          <!-- Code layout -->
+          <template x-if="current.type === 'code'">
+            <div>
+              <p class="text-xs uppercase tracking-[0.2em] text-slate-500 mb-2" x-text="current.eyebrow"></p>
+              <h2 class="text-3xl font-semibold tracking-tight mb-4" x-text="current.title"></h2>
+              <p class="text-base text-slate-700 mb-6 max-w-3xl" x-text="current.body"></p>
+              <pre class="bg-slate-900 text-slate-100 rounded-lg p-5 text-sm leading-relaxed overflow-x-auto"><code x-text="current.code"></code></pre>
+            </div>
+          </template>
+        </div>
+      </template>
+    </div>
+  </main>
+
+  <!-- Bottom chrome: counter, prev/next, hide-chrome hint. -->
+  <footer
+    x-show="!fullscreen"
+    x-transition.opacity
+    class="w-full max-w-7xl px-6 pb-6 flex items-center justify-between"
+  >
+    <div class="text-sm text-slate-500 tabular-nums">
+      <span x-text="slide + 1"></span>
+      <span class="text-slate-300 mx-1">/</span>
+      <span x-text="slides.length"></span>
+    </div>
+    <div class="flex items-center gap-2">
+      <button
+        @click="prev()"
+        :disabled="slide === 0"
+        :class="slide === 0 ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-100'"
+        class="text-sm px-3 py-1.5 rounded-md border border-slate-300 bg-white transition"
+      >Back</button>
+      <button
+        @click="next()"
+        :disabled="slide === slides.length - 1"
+        :class="slide === slides.length - 1 ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-800'"
+        class="text-sm px-3 py-1.5 rounded-md bg-slate-900 text-white transition"
+      >Next</button>
+    </div>
+  </footer>
+
+  <!-- Speaker notes drawer. Toggled with `n`. -->
+  <aside
+    x-show="showNotes"
+    @click.self="showNotes = false"
+    x-transition.opacity
+    class="fixed inset-x-0 bottom-0 bg-slate-900/95 text-slate-100 px-8 py-6 z-50 backdrop-blur"
+  >
+    <div class="max-w-4xl mx-auto">
+      <div class="flex items-center justify-between mb-2">
+        <p class="text-xs uppercase tracking-[0.2em] text-slate-400">Speaker notes</p>
+        <button @click="showNotes = false" class="text-slate-400 hover:text-slate-100 text-sm">close</button>
+      </div>
+      <p class="text-base leading-relaxed" x-text="current.notes"></p>
+    </div>
+  </aside>
+
+  <!-- Subtle reminder of the fullscreen toggle while it's on. -->
+  <div
+    x-show="fullscreen"
+    x-transition.opacity.duration.500ms
+    class="fixed bottom-4 right-4 text-[11px] text-slate-400"
+  >press <kbd class="px-1 py-0.5 rounded bg-slate-200 text-slate-700">f</kbd> to show chrome</div>
+
+</div>
+
+</body>
+</html>

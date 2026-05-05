@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Inbox Copilot — Simulated AI Triage</title>
+
+  <!-- Tailwind via Play CDN; Alpine v3 with defer. -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script defer src="https://unpkg.com/alpinejs@3.14.1/dist/cdn.min.js"></script>
+
+  <style>
+    [x-cloak] { display: none !important; }
+    body { font-feature-settings: 'ss01', 'cv11'; }
+
+    /* Blinking cursor at the end of the streaming reply. */
+    @keyframes blink { 0%, 49% { opacity: 1 } 50%, 100% { opacity: 0 } }
+    .caret { display: inline-block; width: 6px; height: 1em; vertical-align: -2px;
+             background: currentColor; margin-left: 2px; animation: blink 900ms steps(2) infinite; }
+
+    /* Soft entrance for thinking-step rows. */
+    @keyframes pop-in { from { opacity: 0; transform: translateY(2px) } to { opacity: 1; transform: none } }
+    .pop-in { animation: pop-in 220ms ease both; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 antialiased">
+
+<!--
+  THE WHOLE APP LIVES IN ONE x-data BLOCK.
+  Important: this attribute is HTML double-quoted, so any literal " inside
+  would close it. All strings below use apostrophes; template literals use
+  apostrophes for embedded HTML/SVG attribute values.
+
+  The AI is fully simulated. Each ticket carries pre-written 'thinking' steps
+  and two candidate replies. runAI() walks the steps with setTimeout, then
+  streams the reply word-by-word. A monotonic runId aborts stale runs when
+  the user jumps between tickets mid-stream.
+-->
+<div
+  x-cloak
+  x-data="{
+    /* --- Inbox: same customer base as the revenue dashboard. --- */
+    tickets: [
+      {
+        id: 1,
+        sender: 'Maya Chen', email: 'maya@northwind.com',
+        company: 'Northwind Logistics', plan: 'Enterprise',
+        channel: 'Email', received: '12 min ago',
+        subject: 'API rate limits hit during overnight batch',
+        body: 'Hey team — our overnight ETL kept hitting your 429 limit around 02:00 UTC, twice on /v2/orders. We had to retry the whole job by hand at 04:30. Renewal is 24th of next month and procurement is asking if this is going to keep happening. Can you look at the request pattern from our side?\n\n— Maya',
+        ai: {
+          category: 'Technical · API limits',
+          priority: 'High', sentiment: 'frustrated', confidence: 92,
+          history: [
+            'Enterprise tenure: 18 months',
+            'Two related tickets in the last 30 days',
+            'Renewal in 47 days, $12,400 MRR'
+          ],
+          thinking: [
+            'Parsing message intent and extracting timestamps…',
+            'Looking up account: Northwind Logistics',
+            'Checking ticket history (2 prior API-related)',
+            'Cross-referencing API logs at 02:00 UTC',
+            'Drafting reply…'
+          ],
+          replies: [
+            'Hi Maya — sorry for the friction. I confirmed two 429 bursts overnight at 02:01 and 02:14 UTC, both on /v2/orders. Your Enterprise tier currently allows 1,200 req/min and the bursts peaked at 1,580. I have lifted the ceiling to 2,000 req/min for the next 14 days while we look at adding burst credits to your contract. The renewal call on the 24th would be a good time to formalise this — happy to loop in your AE.',
+            'Hi Maya — thanks for flagging this. The 429s line up with what we are seeing in our metrics: two short bursts on /v2/orders. I have raised your tier ceiling to 2,000 req/min for two weeks so the ETL has headroom. Want me to schedule a 15-minute working session this week to walk your data team through the burst pattern?'
+          ]
+        }
+      },
+      {
+        id: 2,
+        sender: 'Tomás Riveira', email: 'tomas@helios.mx',
+        company: 'Helios Manufacturing', plan: 'Enterprise',
+        channel: 'Email', received: '1 hour ago',
+        subject: 'Renewal quote — we need to talk pricing',
+        body: 'Hi — we received the renewal quote yesterday. The 14% increase is hard to justify internally right now. We are open to a multi-year deal if that helps. Can you send a counter-proposal before Friday?\n\nBest, Tomás',
+        ai: {
+          category: 'Commercial · Renewal',
+          priority: 'High', sentiment: 'neutral', confidence: 88,
+          history: [
+            'At-risk health score (last 6 days quiet)',
+            'Procurement has asked for 20% off',
+            'Stage: Renewal · $9,800 MRR'
+          ],
+          thinking: [
+            'Reading commercial intent…',
+            'Pulling current contract terms',
+            'Modelling 2-year vs 3-year scenarios',
+            'Routing to Account Exec queue',
+            'Drafting reply…'
+          ],
+          replies: [
+            'Hi Tomás — thank you for the heads-up. I have pulled your current terms and modelled a couple of options: a two-year flat-rate at the existing price (zero increase) or a three-year deal with a 6% step-up in year three. I will send the counter-proposal by Thursday morning and have your AE, Priya, ready for a call before Friday. Anything specific procurement wants to see in the comparison?',
+            'Hi Tomás — appreciate the candour. I am routing this to Priya (your AE) immediately and will have a counter on your desk by Thursday end of day. We can absolutely do a multi-year structure — the typical shape is a three-year commitment with the increase deferred to year three. Want me to set a 30-minute slot Friday morning to walk through it with procurement?'
+          ]
+        }
+      },
+      {
+        id: 3,
+        sender: 'Aanya Patel', email: 'aanya@forge.capital',
+        company: 'Forge Capital', plan: 'Pro',
+        channel: 'In-app chat', received: '2 hours ago',
+        subject: 'Can we get SAML SSO on the Pro plan?',
+        body: 'Loving the product. Our security team is asking about SAML SSO before we expand seats from 12 to 40. Is this on the Pro plan or do we need to upgrade?',
+        ai: {
+          category: 'Product · Auth',
+          priority: 'Medium', sentiment: 'positive', confidence: 95,
+          history: [
+            'Pro plan, healthy account',
+            'Expansion signal: +28 seats requested',
+            'No prior auth-related tickets'
+          ],
+          thinking: [
+            'Classifying as expansion + product question',
+            'Checking plan-feature matrix',
+            'Surfacing upgrade path',
+            'Drafting reply…'
+          ],
+          replies: [
+            'Hi Aanya — great to hear it. SAML SSO sits on our Business and Enterprise plans (not Pro). Given you are looking at 40 seats, Business is usually the right fit and includes SCIM provisioning too. I can put you in touch with Jordan to walk through pricing — if SSO is the only blocker we can also enable it as a paid add-on on Pro for the next 30 days while you evaluate.',
+            'Hi Aanya — thanks for the kind words! SAML SSO is included on Business and above. For 40 seats Business is the natural step and gets you SCIM as well. Want me to enable a 14-day Business trial on your workspace so security can validate the setup before you commit?'
+          ]
+        }
+      },
+      {
+        id: 4,
+        sender: 'Lena Voss', email: 'lena@quillmedia.io',
+        company: 'Quill Media', plan: 'Starter',
+        channel: 'Email', received: '5 hours ago',
+        subject: 'Cancelling our subscription',
+        body: 'Hi — please cancel our subscription effective end of the billing cycle. We are consolidating onto another tool. No need for a save call.',
+        ai: {
+          category: 'Churn · Voluntary',
+          priority: 'High', sentiment: 'disappointed', confidence: 81,
+          history: [
+            'Starter plan, 8 months tenure',
+            'NPS detractor 21 days ago',
+            'Last login: 14 days ago'
+          ],
+          thinking: [
+            'Recognising explicit cancellation intent',
+            'User declined save call — respecting that',
+            'Pulling export options for their data',
+            'Drafting closing reply…'
+          ],
+          replies: [
+            'Hi Lena — understood, and thank you for being clear about not wanting a save call. I have queued the cancellation for the end of your current cycle (12 May). Before then, you can export workspace data in CSV or JSON from Settings → Data export. If you ever want a clean handoff document for the new tool, ping me and I will put one together.',
+            'Hi Lena — got it, no save call. Cancellation is set for end of cycle on 12 May and you will not be billed again. Your data is exportable from Settings → Data export until that date. If you change your mind in the next 90 days the workspace can be reactivated without losing history.'
+          ]
+        }
+      },
+      {
+        id: 5,
+        sender: 'Sam Okafor', email: 'sam@brambleco.com',
+        company: 'Bramble & Co', plan: 'Pro',
+        channel: 'Email', received: '8 hours ago',
+        subject: 'How do I share a dashboard read-only?',
+        body: 'Quick one — can I share a dashboard with a vendor without giving them edit access? Cheers, Sam',
+        ai: {
+          category: 'How-to · Sharing',
+          priority: 'Low', sentiment: 'positive', confidence: 97,
+          history: [
+            'Pro plan, healthy account',
+            'First ticket from this contact',
+            'Active 4h ago'
+          ],
+          thinking: [
+            'Trivially classifying as how-to',
+            'Pulling docs link',
+            'Drafting one-paragraph answer…'
+          ],
+          replies: [
+            'Hi Sam — yes, click Share on the dashboard, choose Anyone with the link, and toggle Permission to Can view. The vendor gets a read-only URL with no sign-in required. Full doc: docs.example.com/sharing/read-only. Let me know if you want it scoped to a specific email instead.',
+            'Hi Sam — easy one: open the dashboard, hit Share, set the access to Can view, and copy the link. View-only means no editing or comments. If you need an audit trail of who opened it, switch to Email-restricted instead — that requires sign-in.'
+          ]
+        }
+      }
+    ],
+
+    selectedId: 1,
+    aiState: {
+      status: 'idle',  /* idle | thinking | streaming | ready */
+      thinkingIdx: 0,
+      revealedTokens: 0,
+      replyIdx: 0,
+      runId: 0,
+      editing: false,
+      sent: {}         /* keyed by ticket id */
+    },
+    composer: '',
+
+    get selected() { return this.tickets.find(t => t.id === this.selectedId); },
+    get visibleSteps() {
+      if (!this.selected) return [];
+      return this.selected.ai.thinking.slice(0, this.aiState.thinkingIdx);
+    },
+    get currentStepLabel() {
+      if (!this.selected) return '';
+      return this.selected.ai.thinking[this.aiState.thinkingIdx] || '';
+    },
+    get streamingReply() {
+      if (!this.selected) return '';
+      const full = this.selected.ai.replies[this.aiState.replyIdx];
+      if (this.aiState.status === 'streaming') {
+        const tokens = full.split(' ');
+        return tokens.slice(0, this.aiState.revealedTokens).join(' ');
+      }
+      if (this.aiState.status === 'ready') return full;
+      return '';
+    },
+    get sentimentClass() {
+      const s = this.selected?.ai.sentiment;
+      if (s === 'positive')     return 'bg-emerald-100 text-emerald-700';
+      if (s === 'frustrated')   return 'bg-amber-100 text-amber-700';
+      if (s === 'disappointed') return 'bg-rose-100 text-rose-700';
+      return 'bg-slate-100 text-slate-700';
+    },
+    get priorityClass() {
+      const p = this.selected?.ai.priority;
+      if (p === 'High')   return 'bg-rose-100 text-rose-700';
+      if (p === 'Medium') return 'bg-amber-100 text-amber-700';
+      return 'bg-slate-100 text-slate-600';
+    },
+
+    /* --- Methods --- */
+    selectTicket(t) {
+      if (t.id === this.selectedId && this.aiState.status !== 'idle') return;
+      this.selectedId = t.id;
+      this.aiState.replyIdx = 0;
+      this.aiState.editing = false;
+      this.composer = '';
+      this.runAI();
+    },
+
+    runAI() {
+      const myRun = ++this.aiState.runId;
+      this.aiState.status = 'thinking';
+      this.aiState.thinkingIdx = 0;
+      this.aiState.revealedTokens = 0;
+      this.cycleThinking(myRun);
+    },
+
+    cycleThinking(runId) {
+      if (runId !== this.aiState.runId) return;
+      const t = this.selected;
+      if (!t) return;
+      if (this.aiState.thinkingIdx >= t.ai.thinking.length) {
+        this.aiState.status = 'streaming';
+        this.streamTokens(runId);
+        return;
+      }
+      setTimeout(() => {
+        if (runId !== this.aiState.runId) return;
+        this.aiState.thinkingIdx++;
+        this.cycleThinking(runId);
+      }, 480);
+    },
+
+    streamTokens(runId) {
+      if (runId !== this.aiState.runId) return;
+      const full = this.selected.ai.replies[this.aiState.replyIdx];
+      const tokens = full.split(' ');
+      if (this.aiState.revealedTokens >= tokens.length) {
+        this.aiState.status = 'ready';
+        this.composer = full;
+        return;
+      }
+      setTimeout(() => {
+        if (runId !== this.aiState.runId) return;
+        this.aiState.revealedTokens++;
+        this.streamTokens(runId);
+      }, 32);
+    },
+
+    regenerate() {
+      if (!this.selected) return;
+      const n = this.selected.ai.replies.length;
+      this.aiState.replyIdx = (this.aiState.replyIdx + 1) % n;
+      this.aiState.editing = false;
+      this.aiState.revealedTokens = 0;
+      this.aiState.status = 'streaming';
+      const myRun = ++this.aiState.runId;
+      this.streamTokens(myRun);
+    },
+
+    accept() {
+      if (!this.selected) return;
+      this.aiState.sent[this.selected.id] = true;
+      this.aiState.status = 'ready';
+    },
+
+    init() { this.runAI(); }
+  }"
+  class="mx-auto max-w-7xl px-6 py-8"
+>
+
+  <!-- HEADER -->
+  <header class="flex items-center justify-between mb-6 gap-4 flex-wrap">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-lg bg-slate-900 text-white grid place-items-center">
+        <!-- Sparkle glyph as SVG so we don't depend on emoji rendering. -->
+        <svg viewBox="0 0 24 24" class="w-5 h-5" fill="currentColor" aria-hidden="true">
+          <path d="M12 2l1.8 5.6L19 9l-5.2 1.4L12 16l-1.8-5.6L5 9l5.2-1.4L12 2zm6 12l1 2.5L21.5 17l-2.5 1L18 20.5 17 18l-2.5-1L17 16l1-2zM5 14l.8 2L8 16.8 5.8 17.6 5 19.5 4.2 17.6 2 16.8l2.2-.8L5 14z"/>
+        </svg>
+      </div>
+      <div>
+        <h1 class="text-xl font-semibold tracking-tight">Inbox Copilot</h1>
+        <p class="text-sm text-slate-500">Triage, suggested replies, one-click send. The AI is simulated for this demo.</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 text-sm text-slate-500">
+      <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+      <span>Model: copilot-mini · simulated</span>
+    </div>
+  </header>
+
+  <!-- 3-COLUMN LAYOUT -->
+  <section class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+
+    <!-- TICKET LIST -->
+    <aside class="lg:col-span-3 bg-white rounded-lg border border-slate-200">
+      <div class="p-3 border-b border-slate-200 flex items-center justify-between">
+        <span class="font-semibold tracking-tight text-sm">Inbox</span>
+        <span class="text-xs text-slate-500" x-text="tickets.length + ' open'"></span>
+      </div>
+      <ul class="divide-y divide-slate-100">
+        <template x-for="t in tickets" :key="t.id">
+          <li>
+            <button
+              @click="selectTicket(t)"
+              :class="selectedId === t.id ? 'bg-slate-50' : 'hover:bg-slate-50'"
+              class="w-full text-left p-3 transition"
+            >
+              <div class="flex items-baseline justify-between gap-2 mb-1">
+                <span class="text-sm font-medium truncate" x-text="t.sender"></span>
+                <span class="text-xs text-slate-400 shrink-0" x-text="t.received"></span>
+              </div>
+              <p class="text-xs text-slate-700 truncate" x-text="t.subject"></p>
+              <div class="mt-1.5 flex items-center gap-1.5">
+                <span class="text-[10px] px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-600" x-text="t.ai.category"></span>
+                <span x-show="aiState.sent[t.id]" class="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700">sent</span>
+              </div>
+            </button>
+          </li>
+        </template>
+      </ul>
+    </aside>
+
+    <!-- TICKET DETAIL -->
+    <main class="lg:col-span-5 bg-white rounded-lg border border-slate-200 p-5">
+      <template x-if="selected">
+        <div>
+          <div class="flex items-start justify-between gap-3 mb-3">
+            <div class="min-w-0">
+              <h2 class="font-semibold tracking-tight text-lg" x-text="selected.subject"></h2>
+              <p class="text-sm text-slate-500 mt-0.5">
+                <span class="font-medium text-slate-700" x-text="selected.sender"></span>
+                <span class="text-slate-400" x-text="' · ' + selected.email"></span>
+              </p>
+              <p class="text-xs text-slate-500 mt-0.5">
+                <span x-text="selected.company"></span>
+                <span class="text-slate-300 mx-1">·</span>
+                <span x-text="selected.plan + ' plan'"></span>
+                <span class="text-slate-300 mx-1">·</span>
+                <span x-text="selected.channel + ' · ' + selected.received"></span>
+              </p>
+            </div>
+          </div>
+          <div class="mt-4 text-slate-700 text-sm whitespace-pre-line leading-relaxed border-t border-slate-100 pt-4" x-text="selected.body"></div>
+        </div>
+      </template>
+    </main>
+
+    <!-- AI PANEL -->
+    <aside class="lg:col-span-4 space-y-4">
+
+      <!-- Analysis card -->
+      <div class="bg-white rounded-lg border border-slate-200 p-4">
+        <div class="flex items-center justify-between mb-3">
+          <div class="flex items-center gap-2">
+            <svg viewBox="0 0 24 24" class="w-4 h-4 text-violet-600" fill="currentColor" aria-hidden="true">
+              <path d="M12 2l1.8 5.6L19 9l-5.2 1.4L12 16l-1.8-5.6L5 9l5.2-1.4L12 2z"/>
+            </svg>
+            <h3 class="font-semibold tracking-tight text-sm">AI analysis</h3>
+          </div>
+          <span x-show="selected" class="text-[10px] tabular-nums text-slate-500"
+                x-text="'confidence ' + (selected ? selected.ai.confidence : 0) + '%'"></span>
+        </div>
+
+        <!-- Tag row -->
+        <template x-if="selected">
+          <div class="flex flex-wrap gap-1.5 mb-3">
+            <span class="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-700" x-text="selected.ai.category"></span>
+            <span class="text-[11px] px-2 py-0.5 rounded-full" :class="priorityClass" x-text="'priority: ' + selected.ai.priority.toLowerCase()"></span>
+            <span class="text-[11px] px-2 py-0.5 rounded-full" :class="sentimentClass" x-text="'sentiment: ' + selected.ai.sentiment"></span>
+          </div>
+        </template>
+
+        <!-- Customer history -->
+        <template x-if="selected">
+          <div>
+            <p class="text-xs uppercase tracking-wide text-slate-500 mb-1.5">Customer signal</p>
+            <ul class="text-xs text-slate-700 space-y-1">
+              <template x-for="h in selected.ai.history" :key="h">
+                <li class="flex gap-2">
+                  <span class="text-slate-400">•</span>
+                  <span x-text="h"></span>
+                </li>
+              </template>
+            </ul>
+          </div>
+        </template>
+      </div>
+
+      <!-- Thinking + reply card -->
+      <div class="bg-white rounded-lg border border-slate-200 p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h3 class="font-semibold tracking-tight text-sm">Suggested reply</h3>
+          <span class="text-[10px] text-slate-500" x-text="aiState.status"></span>
+        </div>
+
+        <!-- Thinking trace: each step pops in. -->
+        <ol x-show="aiState.status === 'thinking' || aiState.status === 'streaming' || aiState.status === 'ready'" class="space-y-1 mb-3 text-xs">
+          <template x-for="(step, i) in visibleSteps" :key="i">
+            <li class="flex items-center gap-2 text-slate-600 pop-in">
+              <svg viewBox="0 0 24 24" class="w-3 h-3 text-emerald-500 shrink-0" fill="none" stroke="currentColor" stroke-width="3" aria-hidden="true">
+                <path d="M5 13l4 4L19 7"/>
+              </svg>
+              <span x-text="step"></span>
+            </li>
+          </template>
+          <li x-show="aiState.status === 'thinking' && currentStepLabel" class="flex items-center gap-2 text-slate-500 pop-in">
+            <svg class="animate-spin w-3 h-3 shrink-0" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-opacity="0.25" stroke-width="3"/>
+              <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+            </svg>
+            <span x-text="currentStepLabel"></span>
+          </li>
+        </ol>
+
+        <!-- Reply box: read-only stream until ready, then editable. -->
+        <div x-show="aiState.status === 'streaming' || aiState.status === 'ready'" class="rounded-md border border-slate-200 bg-slate-50/50 p-3 text-sm text-slate-800 leading-relaxed min-h-[140px]">
+          <template x-if="!aiState.editing">
+            <p class="whitespace-pre-line">
+              <span x-text="streamingReply"></span><span x-show="aiState.status === 'streaming'" class="caret text-slate-500"></span>
+            </p>
+          </template>
+          <template x-if="aiState.editing">
+            <textarea
+              x-model="composer"
+              rows="7"
+              class="w-full bg-transparent focus:outline-none resize-none text-sm leading-relaxed"
+            ></textarea>
+          </template>
+        </div>
+
+        <!-- Controls -->
+        <div class="flex items-center gap-2 mt-3" x-show="aiState.status === 'ready'">
+          <button
+            @click="regenerate()"
+            class="text-xs px-3 py-1.5 rounded-md border border-slate-300 hover:bg-slate-100 transition flex items-center gap-1.5"
+          >
+            <svg viewBox="0 0 24 24" class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M4 4v6h6M20 20v-6h-6"/>
+              <path d="M20 8a8 8 0 0 0-14.93-2.5M4 16a8 8 0 0 0 14.93 2.5"/>
+            </svg>
+            Regenerate
+          </button>
+          <button
+            @click="aiState.editing = !aiState.editing"
+            :class="aiState.editing ? 'bg-slate-900 text-white border-slate-900' : 'border-slate-300 hover:bg-slate-100'"
+            class="text-xs px-3 py-1.5 rounded-md border transition"
+            x-text="aiState.editing ? 'Done' : 'Edit'"
+          ></button>
+          <div class="flex-1"></div>
+          <button
+            @click="accept()"
+            :disabled="aiState.sent[selectedId]"
+            :class="aiState.sent[selectedId] ? 'bg-emerald-100 text-emerald-700 cursor-not-allowed' : 'bg-slate-900 text-white hover:bg-slate-800'"
+            class="text-xs px-3 py-1.5 rounded-md transition"
+            x-text="aiState.sent[selectedId] ? 'Sent' : 'Accept and send'"
+          ></button>
+        </div>
+
+        <p class="text-[11px] text-slate-400 mt-3 leading-snug">
+          The agent draws on plan, ticket history, and product docs before drafting. Always review before sending.
+        </p>
+      </div>
+    </aside>
+  </section>
+
+  <footer class="mt-10 text-xs text-slate-400">
+    Self-contained Alpine.js + Tailwind demo. The 'AI' here is a setTimeout
+    chain: <code class="text-slate-500">runAI()</code> walks pre-written
+    thinking steps, then <code class="text-slate-500">streamTokens()</code>
+    reveals the reply word by word. Same pattern wires up to a real LLM by
+    swapping these for streaming-API callbacks.
+  </footer>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,6 @@
+interface:
+  display_name: "Audit Docs"
+  short_description: "Documentation health audit for projects and docs sites. Accepts a URL or local directory. Uses a live browser for URLs — handles rendered docs sites and SPAs. Scores doc hygiene..."
+  default_prompt: "$audit-docs"
+policy:
+  allow_implicit_invocation: true

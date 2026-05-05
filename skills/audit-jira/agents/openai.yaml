@@ -1,0 +1,6 @@
+interface:
+  display_name: "Audit Jira"
+  short_description: "Jira project health audit via the Atlassian MCP. Identifies velocity trends, backlog rot, bug clusters, assignee concentration risk, and firefighting patterns. Requires the Atla..."
+  default_prompt: "$audit-jira"
+policy:
+  allow_implicit_invocation: true

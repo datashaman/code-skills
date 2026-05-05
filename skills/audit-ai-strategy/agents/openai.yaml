@@ -1,0 +1,6 @@
+interface:
+  display_name: "Audit Ai Strategy"
+  short_description: "Audit a codebase's AI strategy through John Cutler's four-bucket lens: bad ideas amplified, good ideas supercharged, genuinely new possibilities, and the meta-skill of reading c..."
+  default_prompt: "$audit-ai-strategy"
+policy:
+  allow_implicit_invocation: true

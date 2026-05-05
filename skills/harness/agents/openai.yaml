@@ -1,0 +1,6 @@
+interface:
+  display_name: "Harness"
+  short_description: "Control surface for a harness-engineering Claude Code setup at user or project scope. Handles install, uninstall, update, doctor, adopt, snapshot, status, audit, and memoize. In..."
+  default_prompt: "$harness"
+policy:
+  allow_implicit_invocation: true

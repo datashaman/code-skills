@@ -1,0 +1,6 @@
+interface:
+  display_name: "Onepager"
+  short_description: "Generate a self-contained single-file HTML demo or presentation using Alpine.js + Tailwind via CDN. Emailable, double-clickable, no build step or server. Use when the user asks..."
+  default_prompt: "$onepager"
+policy:
+  allow_implicit_invocation: true

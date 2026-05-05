@@ -1,0 +1,6 @@
+interface:
+  display_name: "Audit Codebase"
+  short_description: "Git-based codebase health audit. Identifies churn hotspots, bus factor risks, bug clusters, and firefighting patterns from git history. Use when asked to \"audit the codebase\", \"..."
+  default_prompt: "$audit-codebase"
+policy:
+  allow_implicit_invocation: true

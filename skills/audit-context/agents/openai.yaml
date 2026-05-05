@@ -1,0 +1,6 @@
+interface:
+  display_name: "Audit Context"
+  short_description: "Audit your Claude Code setup for token waste and context bloat. Checks MCP servers, CLAUDE.md files, skills, agents, commands, plugins, hooks, and permissions. Mines session tra..."
+  default_prompt: "$audit-context"
+policy:
+  allow_implicit_invocation: true

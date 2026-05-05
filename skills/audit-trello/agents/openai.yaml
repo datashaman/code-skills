@@ -1,0 +1,6 @@
+interface:
+  display_name: "Audit Trello"
+  short_description: "Trello board health audit. Identifies throughput trends, backlog rot, blocker clusters, member concentration risk, and overdue patterns. Use when asked to \"audit trello\", \"board..."
+  default_prompt: "$audit-trello"
+policy:
+  allow_implicit_invocation: true

@@ -67,6 +67,8 @@ Do **not** use it for:
 6. **Tabular numerics** (`tabular-nums`) on price/count columns. Small detail, big polish.
 7. **Comment the Alpine concepts inline** the way `references/catalogue.html` does (`x-model is two-way binding`, `x-for renders one element per array item`, etc.). The output is a teaching artifact as much as a working demo.
 8. **No emojis** in the output unless the user asked for them.
+9. **No scattered assets.** Images, icons, textures, fonts, and data must either be embedded in the HTML (`data:` URLs, inline SVG, inline CSS, or inline arrays) or loaded from stable remote URLs/CDNs. Do not leave sibling `.png`, `.jpg`, `.svg`, `.json`, `.js`, `.css`, or screenshot files next to the onepager.
+10. **Clean up after yourself.** If you generate images, screenshots, extracted data, browser snapshots, or temporary files while building or verifying the onepager, delete those temporary artifacts before delivery unless the user explicitly asked to keep them.
 
 ## Style and theme discovery
 
@@ -89,6 +91,12 @@ If the user explicitly asks you to proceed without asking questions, choose a st
 - **Transitions**: prefer `x-transition` with explicit `enter`/`leave` classes for anything that appears/disappears. Motion should fit the style; keep it subtle for serious contexts and more expressive for playful ones.
 - **Empty states**: every list and detail pane should have one. Write the empty-state copy in the selected tone.
 - **Keyboard**: for presentations, wire `@keydown.arrow-right.window` / `arrow-left` / `space` on the root. For demos, at minimum support `Escape` to close modals/panes.
+
+## Images and visual assets
+
+Prefer CSS, inline SVG, or remote image URLs for decorative visuals. If an image must travel with the onepager, embed it as a `data:` URL inside the HTML so the delivered artifact remains one file.
+
+When using generated bitmap images, either embed the final chosen image in the HTML or use a stable hosted URL if the environment provides one. Remove any intermediate image files, screenshots, masks, or rejected variants. The final working directory should contain the onepager HTML only, plus any unrelated files that existed before the task.
 
 ## Presentation-mode specifics
 
@@ -133,7 +141,7 @@ For lighter onboarding (one-shot welcome panels, dismissible tooltips), a single
 - [ ] At least one `x-transition` somewhere — UIs without motion feel dead.
 - [ ] Empty state for every list / detail region.
 - [ ] Tasteful comments explaining the Alpine directives, matching `references/catalogue.html`'s tone.
-- [ ] No build artifacts, no `<link rel="stylesheet">` to local files, no `<script src="./...">`.
+- [ ] No build artifacts, no sibling assets, no screenshot files, no browser snapshot folders, no `<link rel="stylesheet">` to local files, no `<script src="./...">`, and no local `<img src="./...">`.
 - [ ] Opens cleanly with `open foo.html` — verify mentally that nothing assumes a server origin (no `fetch` to relative URLs, no module scripts).
 
 ## Graduation signals (mention these to the user when relevant)

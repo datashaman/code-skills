@@ -130,7 +130,7 @@ Builds on [OpenAI's harness-engineering article](https://openai.com/index/harnes
 
 Generate a self-contained single-file HTML demo or presentation using Alpine.js + Tailwind via CDN. Emailable, double-clickable, no build step. Aimed at business and marketing users putting an interactive thing in front of a stakeholder without booking engineering — the agent makes all edits, the user only opens the file in a browser.
 
-Ships with four reference patterns the skill draws on: a baseline list-with-details demo, a KPI dashboard with a coaching-mark tour (spotlight overlay, `$persist`-backed "tour seen" state), a keyboard-driven slide deck with five layouts (cover, bullets, metric, quote, code), and a simulated-AI inbox with thinking-step trace and word-by-word streaming. Live worked examples at [datashaman/alpine-onepager](https://github.com/datashaman/alpine-onepager).
+Ships with four reference patterns the skill draws on: a baseline list-with-details demo, a KPI dashboard with a coaching-mark tour (spotlight overlay, `$persist`-backed "tour seen" state), a keyboard-driven slide deck with five layouts (cover, bullets, metric, quote, code), and a simulated-AI inbox with thinking-step trace and word-by-word streaming.
 
 **Arguments:** None — drop a topic in natural language and the skill produces the file.
 

@@ -131,6 +131,8 @@ When the request is an interactive demo:
 
 After delivering a non-trivial demo, **offer to add a coaching-mark / onboarding tour** as a follow-up. Don't add it unprompted — surface it as a one-line question: *"Want me to wire up a coaching-mark tour for this?"*. Most demos benefit, but unsolicited additions inflate scope.
 
+This is a two-step flow: first deliver the demo and ask whether the user wants the tour; only after they say yes should you add the full coaching-mark system.
+
 When the user accepts, the pattern from `references/dashboard-with-tour.html` is the reference:
 
 - **State**: `tour: { active: false, step: 0 }` plus a `tourSteps` array of `{ target, title, body, placement, autoSelect? }` entries. `target` matches a `data-tour="..."` attribute on a real DOM element. `placement` is `'top' | 'bottom' | 'left' | 'right'`. `autoSelect` is optional — opens a drawer / picks an item before measuring, so the spotlight can land on dynamically-revealed UI.
@@ -155,6 +157,7 @@ For lighter onboarding (one-shot welcome panels, dismissible tooltips), a single
 - [ ] Mobile layout checked for dense lists/tables: no clipped chips, no squeezed columns, no accidental horizontal scrolling, and long dynamic names still fit.
 - [ ] Hero or major illustrative visuals contain topic-specific content, not empty placeholders.
 - [ ] Served locally and checked in a real browser when browser tooling is available; if not available, recommend a browser extension/plugin/MCP bridge for future visual QA.
+- [ ] For non-trivial demos, final response offers the coaching-mark / onboarding tour as a follow-up rather than adding it silently.
 - [ ] Tasteful comments explaining the Alpine directives, matching `references/catalogue.html`'s tone.
 - [ ] No build artifacts, no sibling assets, no screenshot files, no browser snapshot folders, no `<link rel="stylesheet">` to local files, no `<script src="./...">`, and no local `<img src="./...">`.
 - [ ] Opens cleanly with `open foo.html` — verify mentally that nothing assumes a server origin (no `fetch` to relative URLs, no module scripts).

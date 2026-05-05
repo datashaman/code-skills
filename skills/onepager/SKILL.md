@@ -91,12 +91,15 @@ If the user explicitly asks you to proceed without asking questions, choose a st
 - **Transitions**: prefer `x-transition` with explicit `enter`/`leave` classes for anything that appears/disappears. Motion should fit the style; keep it subtle for serious contexts and more expressive for playful ones.
 - **Empty states**: every list and detail pane should have one. Write the empty-state copy in the selected tone.
 - **Keyboard**: for presentations, wire `@keydown.arrow-right.window` / `arrow-left` / `space` on the root. For demos, at minimum support `Escape` to close modals/panes.
+- **Mobile-first dense content**: tables, catalogues, card grids, and comparison lists must be designed for narrow screens first. On mobile, stack dense rows into readable cards, allow long labels and chips to wrap, avoid `truncate` except at wider breakpoints, and use `min-w-0` on flex/grid children that contain dynamic text. Reintroduce compact rows or table-like layouts only from `sm`/`md` upward.
 
 ## Images and visual assets
 
 Prefer CSS, inline SVG, or remote image URLs for decorative visuals. If an image must travel with the onepager, embed it as a `data:` URL inside the HTML so the delivered artifact remains one file.
 
 When using generated bitmap images, either embed the final chosen image in the HTML or use a stable hosted URL if the environment provides one. Remove any intermediate image files, screenshots, masks, or rejected variants. The final working directory should contain the onepager HTML only, plus any unrelated files that existed before the task.
+
+Hero visuals and decorative mock objects should carry real information. Avoid blank placeholder cards, generic grey boxes, or empty device frames. Fill them with lightweight, topic-specific content such as labels, charts, stats, mini examples, or meaningful silhouettes so the first viewport feels intentional even before the user interacts.
 
 ## Presentation-mode specifics
 
@@ -114,6 +117,7 @@ When the request is an interactive demo:
 - Sample data goes in an `items` (or domain-appropriate) array at the top of `x-data`. Provide 12–20 realistic-looking entries — enough to make filter/sort feel meaningful, not so many the file bloats.
 - Always include: a search/filter control, a sort control, a list, a detail pane (or modal), and an empty state. This is the load-bearing pattern from `references/catalogue.html` and it scales to most demo asks.
 - Selection state lives at the root (`selected: null`), not inside the loop.
+- If the demo has a data table or card table, build an explicit mobile layout rather than relying on the desktop table to shrink. A good default is: controls stack, each result becomes a self-contained card, badges/chips wrap onto separate lines, and secondary details move below the title. Confirm that no row requires horizontal scrolling unless horizontal scrolling is the product behavior.
 
 ## Offer an onboarding flow
 
@@ -140,6 +144,8 @@ For lighter onboarding (one-shot welcome panels, dismissible tooltips), a single
 - [ ] Getters used for derived data, not inline computations.
 - [ ] At least one `x-transition` somewhere — UIs without motion feel dead.
 - [ ] Empty state for every list / detail region.
+- [ ] Mobile layout checked for dense lists/tables: no clipped chips, no squeezed columns, no accidental horizontal scrolling, and long dynamic names still fit.
+- [ ] Hero or major illustrative visuals contain topic-specific content, not empty placeholders.
 - [ ] Tasteful comments explaining the Alpine directives, matching `references/catalogue.html`'s tone.
 - [ ] No build artifacts, no sibling assets, no screenshot files, no browser snapshot folders, no `<link rel="stylesheet">` to local files, no `<script src="./...">`, and no local `<img src="./...">`.
 - [ ] Opens cleanly with `open foo.html` — verify mentally that nothing assumes a server origin (no `fetch` to relative URLs, no module scripts).

@@ -101,6 +101,14 @@ When using generated bitmap images, either embed the final chosen image in the H
 
 Hero visuals and decorative mock objects should carry real information. Avoid blank placeholder cards, generic grey boxes, or empty device frames. Fill them with lightweight, topic-specific content such as labels, charts, stats, mini examples, or meaningful silhouettes so the first viewport feels intentional even before the user interacts.
 
+## Browser verification workflow
+
+Even though the delivered file should be double-clickable, browser tooling often cannot inspect `file://` pages. During development, serve the directory with a tiny local server such as `python3 -m http.server 4173`, open `http://127.0.0.1:4173/<file>.html`, verify desktop and mobile layouts, then stop the server before finishing.
+
+If the agent cannot directly see or inspect the page, tell the user that a browser bridge is worth installing for future work. Recommend an in-app browser, Playwright MCP server, browser-use plugin, or equivalent browser extension/MCP service that lets the AI navigate local URLs, inspect the DOM, capture screenshots, and check responsive layouts. This is especially important for onepagers because visual issues often survive static HTML review.
+
+Do not leave verification artifacts behind. Browser screenshots, Playwright snapshot folders, console logs, and temporary server output are development byproducts, not part of the delivered onepager.
+
 ## Presentation-mode specifics
 
 When the request is a slide deck:
@@ -146,6 +154,7 @@ For lighter onboarding (one-shot welcome panels, dismissible tooltips), a single
 - [ ] Empty state for every list / detail region.
 - [ ] Mobile layout checked for dense lists/tables: no clipped chips, no squeezed columns, no accidental horizontal scrolling, and long dynamic names still fit.
 - [ ] Hero or major illustrative visuals contain topic-specific content, not empty placeholders.
+- [ ] Served locally and checked in a real browser when browser tooling is available; if not available, recommend a browser extension/plugin/MCP bridge for future visual QA.
 - [ ] Tasteful comments explaining the Alpine directives, matching `references/catalogue.html`'s tone.
 - [ ] No build artifacts, no sibling assets, no screenshot files, no browser snapshot folders, no `<link rel="stylesheet">` to local files, no `<script src="./...">`, and no local `<img src="./...">`.
 - [ ] Opens cleanly with `open foo.html` — verify mentally that nothing assumes a server origin (no `fetch` to relative URLs, no module scripts).

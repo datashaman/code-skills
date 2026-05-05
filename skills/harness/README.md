@@ -1,5 +1,7 @@
 # `/harness` — Claude Code harness control surface
 
+> **⚠️ WIP — not ready for use.** This skill is under active development and is not yet stable. Don't install it on a setup you care about.
+
 A small opinionated skill that turns `~/.claude/` into a proper **harness**: feedforward guides Claude reads before it acts, deterministic sensors that catch drift after, and an optional drift-detection loop that PRs deltas against the latest releases each month.
 
 Sub-actions: **install**, **uninstall**, **update**, **doctor**, **adopt**, **snapshot**, **status**, **audit**. All idempotent. No surface gets clobbered without consent.

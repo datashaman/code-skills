@@ -106,6 +106,8 @@ Trello board health audit. Queries five dimensions of card data to identify thro
 
 ### `/harness`
 
+> **⚠️ WIP — not ready for use.** This skill is under active development and is not yet stable. Don't install it on a setup you care about.
+
 Control surface for a harness-engineering Claude Code setup at user or project scope. Sub-actions: **install** (operating-contract CLAUDE.md, four guardrail hooks, `/verify` and `/plan` slash commands, auto-memory seeds, settings.json patch); **uninstall** (symmetric reversal with content-match protection for customised files); **update** (refresh installed files vs current templates with diffable `--merge` mode); **doctor** (end-to-end diagnostic — perms, hook smoke-test, settings JSON validity); **adopt** (retrofit into an existing project — detects stack, writes a starter `scripts/harness-check.sh` pass/fail gate, prints next-step install command); **snapshot** (sanitised mirror of `~/.claude/` to a private git repo); **status** (report installed / modified / missing per surface); **audit** (prepare a monthly remote routine that PRs deltas against the latest Anthropic releases and Claude Code community patterns). All idempotent.
 
 Builds on [OpenAI's harness-engineering article](https://openai.com/index/harness-engineering/), [Martin Fowler's writeup](https://martinfowler.com/articles/harness-engineering.html), and patterns from Boris Cherny, Simon Willison, Jesse Vincent (Superpowers), Geoffrey Huntley, Hamel Husain, and Steve Yegge. Sibling to [datashaman/harness-template](https://github.com/datashaman/harness-template) (the project-scope counterpart).

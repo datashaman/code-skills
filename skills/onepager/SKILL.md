@@ -16,7 +16,7 @@ Produce one HTML file. No `package.json`, no bundler, no server, no separate JS/
 
 ## Reference examples
 
-Four canonical patterns live alongside this file in `references/`. Read whichever matches the request before you start writing — they encode all the conventions below as working code.
+Four canonical patterns live alongside this file in `references/`. Read whichever matches the request before you start writing. Use them for interaction structure and Alpine patterns, not as mandatory visual themes.
 
 - `references/catalogue.html` — the baseline demo pattern: search + filter + sort + detail pane + empty state. Start here for any list-with-details ask.
 - `references/dashboard-with-tour.html` — KPI dashboard with a coaching-mark tour (spotlight overlay, `getBoundingClientRect` measurement, persisted "tour seen" via the `$persist` plugin).
@@ -25,12 +25,12 @@ Four canonical patterns live alongside this file in `references/`. Read whicheve
 
 ## Who you are talking to
 
-Assume the person invoking this skill is a **business or marketing user** — comfortable with computers and willing to open a file in a text editor or run `open foo.html`, but **not a developer**. They are using this to put a working interactive thing in front of a client, a stakeholder, or a colleague — without booking a sprint with engineering.
+Assume the person invoking this skill is a **non-developer stakeholder** — comfortable with computers and willing to open a file in a text editor or run `open foo.html`, but not interested in framework internals. They are using this to put a working interactive thing in front of a client, a stakeholder, a team, or an audience without booking a sprint with engineering.
 
 What that means for you:
 
 - **No jargon without translation.** If you mention `x-data`, `getter`, `$persist`, or a CDN, give a one-line "this means…" the first time. The teaching comments inside the HTML do this; your chat replies should too.
-- **Default to "I'll just do it"** for anything that needs a code change. Don't ask "do you want me to add a getter for the filtered list?" — they don't know. Decide and do; describe what you did in plain language afterwards.
+- **Default to "I'll just do it"** for technical implementation details. Do not ask whether to add getters, state fields, or event handlers. Do ask for creative direction when the user's request does not specify the desired style, tone, audience, or theme.
 - **You make the edits, not them.** Never tell the user to open the file and change a line, replace an array, or paste a snippet. If something needs changing, change it yourself with the editing tools. The user's only interaction with the file should be opening it in a browser to look at the result.
 - **Talk about outcomes, not implementations.** "I added a search box that filters as you type" beats "I bound `x-model` to a reactive `search` property and added a `filteredItems` getter." Reserve the second form for inline code comments.
 - **Don't suggest dev workflow changes.** No "add a test", "run the linter", "set up CI", "convert to TypeScript". They are not running any of that.
@@ -68,13 +68,26 @@ Do **not** use it for:
 7. **Comment the Alpine concepts inline** the way `references/catalogue.html` does (`x-model is two-way binding`, `x-for renders one element per array item`, etc.). The output is a teaching artifact as much as a working demo.
 8. **No emojis** in the output unless the user asked for them.
 
-## Conventions to follow
+## Style and theme discovery
 
-- **Tailwind palette**: default to `slate` for neutrals, white cards on `bg-slate-50`, `border-slate-200/300`, `text-slate-500/700/900`. Avoid gradient soup and rainbow accents — keep it editorial.
-- **Spacing**: `mx-auto max-w-6xl px-6 py-10` for the page container is a sensible default.
-- **Typography**: `tracking-tight` on headings, `font-semibold` (not `font-bold`), `antialiased` on body.
-- **Transitions**: prefer `x-transition` with explicit `enter`/`leave` classes for anything that appears/disappears. Defaults are too snappy.
-- **Empty states**: every list and detail pane should have one. Dashed border, muted text, helpful sentence.
+Before creating a onepager, identify whether the user has already specified the visual direction. Treat phrases like "investor memo", "retro arcade", "luxury retail", "internal dashboard", "zine", "playful", "minimal", "cyberpunk", "for kids", "for executives", or a linked/reference design as style direction.
+
+If style direction is missing or too vague, interview the user briefly before writing the HTML. Ask one concise question with 3-5 concrete style options plus an invitation to name their own. Keep the options tailored to the topic rather than generic. For example:
+
+> What style should this onepager use: analyst briefing, collector magazine, playful trading-card binder, auction-house premium, or something else?
+
+When the user provides a style, honor it through layout, typography scale, color, imagery, density, copy tone, and interaction details. Do not impose a business/editorial theme unless the user chose it or the topic clearly calls for it.
+
+If the user explicitly asks you to proceed without asking questions, choose a style that fits the audience and topic, then state the assumption in one sentence before building.
+
+## Interaction and implementation conventions
+
+- **Theme follows the interview.** Pick color, spacing, and typography from the user's chosen style. There is no universal palette or business default.
+- **Fallback style only when needed.** If the user gives no style direction and cannot be reached, use a clear, readable neutral treatment with restrained colors and enough contrast. Keep it visually appropriate to the topic, not automatically corporate.
+- **Spacing**: use a responsive page container appropriate to the chosen style. Dense dashboards, magazine explainers, pitch pages, and playful demos should not all share the same spacing system.
+- **Typography**: make headings, labels, and body copy match the theme and audience. Preserve readability; do not use tiny text, negative tracking, or viewport-scaled font sizes.
+- **Transitions**: prefer `x-transition` with explicit `enter`/`leave` classes for anything that appears/disappears. Motion should fit the style; keep it subtle for serious contexts and more expressive for playful ones.
+- **Empty states**: every list and detail pane should have one. Write the empty-state copy in the selected tone.
 - **Keyboard**: for presentations, wire `@keydown.arrow-right.window` / `arrow-left` / `space` on the root. For demos, at minimum support `Escape` to close modals/panes.
 
 ## Presentation-mode specifics

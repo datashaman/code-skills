@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"' EXIT
+trap 'rm -rf "$TMP" "$ROOT/scripts/workflow_advisor.egg-info"' EXIT
 
 python3 -m venv "$TMP/venv"
 "$TMP/venv/bin/python" -m pip install -q -e "$ROOT"

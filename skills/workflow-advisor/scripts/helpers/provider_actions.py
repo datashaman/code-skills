@@ -224,11 +224,30 @@ def comment_update_or_post(
     """
     Update a known comment or post a new one.
 
-    Marker-based lookup is intentionally queued for a later richer executor; the
-    safe first implementation posts unless a concrete comment id is supplied.
+    In apply mode, a marker without a concrete comment id is resolved against
+    existing issue/PR comments before deciding whether to PATCH or POST.
     """
     if marker and marker not in body:
         body = f"{body.rstrip()}\n\n<!-- {marker} -->"
+
+    completed: list[int] = []
+    commands: list[list[str]] = []
+    run = runner or _default_runner
+
+    if marker and not comment_id and not dry_run:
+        list_command = _list_comments_command(repo, item_number)
+        commands.append(list_command)
+        listed = run(list_command)
+        completed.append(listed.returncode)
+        if listed.returncode != 0:
+            return {
+                "action": "comment.update_or_post",
+                "dry_run": dry_run,
+                "commands": commands,
+                "completed": completed,
+                "error": listed.stderr,
+            }
+        comment_id = _find_marker_comment_id(listed.stdout, marker)
 
     if comment_id:
         command = [
@@ -250,7 +269,17 @@ def comment_update_or_post(
             "-f",
             f"body={body}",
         ]
-    return _run_or_preview("comment.update_or_post", [command], dry_run, runner)
+    commands.append(command)
+    if dry_run:
+        return {"action": "comment.update_or_post", "dry_run": True, "commands": commands}
+
+    completed.append(run(command).returncode)
+    return {
+        "action": "comment.update_or_post",
+        "dry_run": False,
+        "commands": commands,
+        "completed": completed,
+    }
 
 
 def assign_reviewers(
@@ -354,6 +383,23 @@ def _run_or_preview(
 
 def _default_runner(command: list[str]) -> subprocess.CompletedProcess:
     return subprocess.run(command, check=False, capture_output=True, text=True)
+
+
+def _list_comments_command(repo: str, item_number: int | str) -> list[str]:
+    return ["gh", "api", f"repos/{repo}/issues/{item_number}/comments", "--paginate"]
+
+
+def _find_marker_comment_id(comments_json: str, marker: str) -> int | str | None:
+    try:
+        comments = json.loads(comments_json or "[]")
+    except json.JSONDecodeError:
+        return None
+
+    needle = marker if marker.startswith("<!--") else f"<!-- {marker} -->"
+    for comment in comments:
+        if needle in str(comment.get("body", "")):
+            return comment.get("id")
+    return None
 
 
 def _append_jsonl(path: Path | str, records: list[dict]) -> None:

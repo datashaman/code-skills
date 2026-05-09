@@ -31,6 +31,29 @@ def main() -> int:
     )
     assert "<!-- workflow-advisor:status -->" in comment["commands"][0][-1]
 
+    comment_calls = []
+
+    def fake_comment_runner(command: list[str]) -> subprocess.CompletedProcess:
+        comment_calls.append(command)
+        if command[-1] == "--paginate":
+            comments = [{"id": 123, "body": "old\n\n<!-- workflow-advisor:status -->"}]
+            return subprocess.CompletedProcess(command, 0, json.dumps(comments), "")
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    updated_comment = provider_actions.comment_update_or_post(
+        "example/repo",
+        42,
+        "Status changed again.",
+        marker="workflow-advisor:status",
+        dry_run=False,
+        runner=fake_comment_runner,
+    )
+    assert updated_comment["completed"] == [0, 0]
+    assert comment_calls[0][-1] == "--paginate"
+    assert "repos/example/repo/issues/comments/123" in comment_calls[1]
+    assert "--method" in comment_calls[1]
+    assert "PATCH" in comment_calls[1]
+
     reviewers = provider_actions.assign_reviewers("example/repo", 42, ["@octocat"])
     assert "reviewers[]=octocat" in reviewers["commands"][0]
 

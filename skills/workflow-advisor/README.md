@@ -38,6 +38,45 @@ audience documentation, post-release validation).
 - **`references/config-schema.yml`** — the canonical config shape.
 - **`scripts/cli.py`** — the `workflow-advisor` CLI entry point.
 
+## CLI Quickstart
+
+Bootstrap a repo-local `.workflow/` skeleton:
+
+```bash
+workflow-advisor interview --write-default --repo owner/repo
+```
+
+Inspect and validate state:
+
+```bash
+workflow-advisor doctor
+workflow-advisor status
+workflow-advisor lifecycle validate
+```
+
+Dry-run and apply reconcile passes:
+
+```bash
+workflow-advisor reconcile --dry-run --event-name pull_request --event-payload event.json
+workflow-advisor reconcile --event-name pull_request --event-payload event.json
+```
+
+Inspect provider actions before mutating GitHub:
+
+```bash
+workflow-advisor provider-actions list
+workflow-advisor provider-actions flush
+workflow-advisor provider-actions flush --apply
+```
+
+Generate reports:
+
+```bash
+workflow-advisor report process
+workflow-advisor report role-load
+workflow-advisor report observability --format json
+```
+
 ## Folder structure
 
 ```
@@ -93,6 +132,12 @@ workflow-advisor/
     helpers/
       reconcile/
         checkpoint.py                   # git-based safety net
+
+  tests/
+    smoke.sh                            # full local verification suite
+    cli_matrix.sh                       # CLI command coverage
+    package_smoke.sh                    # package install and console script
+    *_smoke.py                          # focused helper smoke tests
 ```
 
 ## Reading order
@@ -117,6 +162,19 @@ For a contributor adding functionality:
 4. If a new profile: add to `references/profiles/composition.md`
    interaction rules.
 5. Add tests under `tests/` (skill tests, not user-repo process tests).
+
+## Testing
+
+Run the full verification suite from the repository root:
+
+```bash
+skills/workflow-advisor/tests/smoke.sh
+```
+
+The suite covers CLI routing, package install, provider actions, lifecycle
+gates, cascade dependents, state I/O, polling, checkpointing, bootstrap, config
+validation, templates, reports, and reconcile idempotency. For fast focused
+checks, run the individual files under `skills/workflow-advisor/tests/`.
 
 ## Key design decisions
 

@@ -1,0 +1,10 @@
+name: feature PRs need an approved test plan
+given:
+  pr:
+    type: feature
+    spec_state: approved
+    test_plan_state: null
+when: pull_request.opened
+then:
+  labels_added: [needs:test-plan]
+  stage: test-plan

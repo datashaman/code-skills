@@ -1,0 +1,8 @@
+name: user-facing features need audience documentation
+given:
+  pr:
+    type: feature
+    areas: [user-facing]
+when: pull_request.opened
+then:
+  labels_added: [needs:doc:end_user]

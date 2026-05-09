@@ -1,0 +1,7 @@
+name: security-sensitive PRs need a threat model
+given:
+  pr:
+    files: [skills/example/scripts/auth.py]
+when: pull_request.opened
+then:
+  labels_added: [area:security-sensitive, needs:threat-model]

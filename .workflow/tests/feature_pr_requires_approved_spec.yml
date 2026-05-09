@@ -1,0 +1,10 @@
+name: feature PRs require an approved spec
+given:
+  pr:
+    type: feature
+    body: ""
+when: pull_request.opened
+then:
+  labels_added: [needs:spec, type:feature]
+  stage: spec
+  comments_match: ".*spec.*required.*"

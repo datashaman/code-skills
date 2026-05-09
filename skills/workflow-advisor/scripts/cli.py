@@ -24,7 +24,9 @@ handler, prints results.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import json
+import os
 from pathlib import Path
 import sys
 from typing import Any
@@ -69,70 +71,74 @@ def cmd_reconcile(args: argparse.Namespace) -> int:
     - Local interactive use when the user wants to manually reconcile.
     - Other CLI subcommands as a building block.
     """
-    config = config_io.load_from_path(_config_path())
+    config_path = _config_path().resolve()
+    event_payload = str(Path(args.event_payload).resolve()) if args.event_payload else None
 
-    # Translate provider event to canonical event.
-    event = transport_normalize.translate(
-        provider=args.transport,
-        event_name=args.event_name,
-        event_action=args.event_action,
-        payload_path=args.event_payload,
-    )
+    with _working_directory(config_path.parent.parent):
+        config = config_io.load_from_path(config_path)
 
-    # Idempotency check.
-    if event and _already_processed(event, config):
-        print(json.dumps({"event": "reconcile.noop", "reason": "already_processed"}))
+        # Translate provider event to canonical event.
+        event = transport_normalize.translate(
+            provider=args.transport,
+            event_name=args.event_name,
+            event_action=args.event_action,
+            payload_path=event_payload,
+        )
+
+        # Idempotency check.
+        if event and _already_processed(event, config):
+            print(json.dumps({"event": "reconcile.noop", "reason": "already_processed"}))
+            return 0
+
+        # Run the loop. Each phase is a pure function over its inputs.
+        observed = observe_phase.run(config=config, event=event)
+        classification = classify_phase.run(config=config, observed=observed)
+
+        if args.dry_run:
+            # Dry-run: produce proposed changes without writing.
+            proposed = apply_phase.dry_run(
+                config=config, observed=observed, classification=classification
+            )
+            cascade = cascade_phase.dry_run(
+                config=config, observed=observed, classification=classification, proposed=proposed
+            )
+            _print_dry_run_summary(proposed, cascade)
+            return 0
+
+        # Real run: apply with checkpointing.
+        with checkpoint.session(config=config, event=event) as session:
+            applied = apply_phase.run(
+                config=config, observed=observed, classification=classification, session=session
+            )
+            cascaded = cascade_phase.run(
+                config=config,
+                observed=observed,
+                classification=classification,
+                applied=applied,
+                session=session,
+            )
+            log_phase.run(
+                config=config,
+                event=event,
+                observed=observed,
+                classification=classification,
+                applied=applied,
+                cascaded=cascaded,
+                session=session,
+            )
+            # checkpoint.session commits on context exit if any writes occurred.
+
+        provider_result = _handle_provider_actions_after_reconcile(config)
+        print(
+            json.dumps(
+                {
+                    "event": "reconcile.completed",
+                    "commit": session.commit_sha,
+                    "provider_actions": provider_result,
+                }
+            )
+        )
         return 0
-
-    # Run the loop. Each phase is a pure function over its inputs.
-    observed = observe_phase.run(config=config, event=event)
-    classification = classify_phase.run(config=config, observed=observed)
-
-    if args.dry_run:
-        # Dry-run: produce proposed changes without writing.
-        proposed = apply_phase.dry_run(
-            config=config, observed=observed, classification=classification
-        )
-        cascade = cascade_phase.dry_run(
-            config=config, observed=observed, classification=classification, proposed=proposed
-        )
-        _print_dry_run_summary(proposed, cascade)
-        return 0
-
-    # Real run: apply with checkpointing.
-    with checkpoint.session(config=config, event=event) as session:
-        applied = apply_phase.run(
-            config=config, observed=observed, classification=classification, session=session
-        )
-        cascaded = cascade_phase.run(
-            config=config,
-            observed=observed,
-            classification=classification,
-            applied=applied,
-            session=session,
-        )
-        log_phase.run(
-            config=config,
-            event=event,
-            observed=observed,
-            classification=classification,
-            applied=applied,
-            cascaded=cascaded,
-            session=session,
-        )
-        # checkpoint.session commits on context exit if any writes occurred.
-
-    provider_result = _handle_provider_actions_after_reconcile(config)
-    print(
-        json.dumps(
-            {
-                "event": "reconcile.completed",
-                "commit": session.commit_sha,
-                "provider_actions": provider_result,
-            }
-        )
-    )
-    return 0
 
 
 def cmd_status(args: argparse.Namespace) -> int:
@@ -547,6 +553,16 @@ def _config_path() -> Path:
     raise FileNotFoundError(
         ".workflow/config.yml not found. Run bootstrap first or check your working directory."
     )
+
+
+@contextlib.contextmanager
+def _working_directory(path: Path):
+    previous = Path.cwd()
+    os.chdir(path)
+    try:
+        yield
+    finally:
+        os.chdir(previous)
 
 
 def _already_processed(event: Any, config: dict) -> bool:

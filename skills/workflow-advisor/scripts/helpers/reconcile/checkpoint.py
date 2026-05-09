@@ -309,8 +309,8 @@ def _build_commit_message(sess: Session) -> str:
 
     # Trigger.
     if sess.event:
-        actor = getattr(sess.event, "actor", None) or "unknown"
-        event_name = getattr(sess.event, "name", "manual")
+        actor = _event_actor(sess.event)
+        event_name = _event_name(sess.event)
         lines.append(f"trigger: {event_name} by @{actor}")
 
     # Classification.
@@ -362,7 +362,7 @@ def _default_summary(sess: Session) -> str:
     """Build a reasonable subject line if the caller didn't set one."""
     parts = []
     if sess.event:
-        parts.append(getattr(sess.event, "name", "reconcile"))
+        parts.append(_event_name(sess.event))
     if sess.classification:
         cls = sess.classification.get("classification")
         if cls:
@@ -374,6 +374,26 @@ def _default_summary(sess: Session) -> str:
     if not parts:
         parts.append("reconcile pass")
     return " — ".join(parts)
+
+
+def _event_name(event: Any) -> str:
+    if isinstance(event, dict):
+        return str(event.get("name") or "manual")
+    return str(getattr(event, "name", "manual"))
+
+
+def _event_actor(event: Any) -> str:
+    if isinstance(event, dict):
+        payload = event.get("payload") or {}
+        provider_meta = event.get("provider_meta") or {}
+        return str(
+            event.get("actor")
+            or payload.get("actor")
+            or payload.get("author")
+            or provider_meta.get("actor")
+            or "unknown"
+        )
+    return str(getattr(event, "actor", None) or "unknown")
 
 
 # ---------------------------------------------------------------------------

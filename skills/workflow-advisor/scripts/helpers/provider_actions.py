@@ -15,6 +15,8 @@ import subprocess
 from typing import Callable, Iterable
 
 QUEUE_FILE = Path(".workflow/provider-actions/pending.jsonl")
+APPLIED_FILE = Path(".workflow/provider-actions/applied.jsonl")
+FAILED_FILE = Path(".workflow/provider-actions/failed.jsonl")
 
 Runner = Callable[[list[str]], subprocess.CompletedProcess]
 
@@ -39,6 +41,141 @@ def queue_action(
     with path.open("a") as f:
         f.write(json.dumps(record, sort_keys=True) + "\n")
     return record
+
+
+def list_pending(queue_path: Path | str = QUEUE_FILE) -> list[dict]:
+    """Read pending provider actions from JSONL."""
+    path = Path(queue_path)
+    if not path.exists():
+        return []
+    records = []
+    with path.open() as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            records.append(json.loads(line))
+    return records
+
+
+def flush_queue(
+    dry_run: bool = True,
+    queue_path: Path | str = QUEUE_FILE,
+    applied_path: Path | str = APPLIED_FILE,
+    failed_path: Path | str = FAILED_FILE,
+    runner: Runner | None = None,
+) -> dict:
+    """
+    Execute or preview pending provider actions.
+
+    Dry-run leaves the queue untouched. Apply mode appends successful records to
+    applied_path, failed records to failed_path, and rewrites pending with only
+    records that did not complete.
+    """
+    pending = list_pending(queue_path)
+    results = []
+    remaining = []
+    applied = []
+    failed = []
+
+    for record in pending:
+        result = execute_record(record, dry_run=dry_run, runner=runner)
+        results.append(result)
+        if dry_run:
+            continue
+        if result.get("ok"):
+            applied.append(
+                {**record, "status": "applied", "result": result, "applied_at": _now_iso()}
+            )
+        else:
+            failed_record = {
+                **record,
+                "status": "failed",
+                "result": result,
+                "failed_at": _now_iso(),
+            }
+            failed.append(failed_record)
+            remaining.append(record)
+
+    if not dry_run:
+        _append_jsonl(applied_path, applied)
+        _append_jsonl(failed_path, failed)
+        _write_jsonl(queue_path, remaining)
+
+    return {
+        "dry_run": dry_run,
+        "pending": len(pending),
+        "applied": len(applied),
+        "failed": len(failed),
+        "remaining": len(remaining) if not dry_run else len(pending),
+        "results": results,
+    }
+
+
+def execute_record(record: dict, dry_run: bool = True, runner: Runner | None = None) -> dict:
+    """Execute one provider action record."""
+    action = record.get("action")
+    payload = record.get("payload") or {}
+
+    try:
+        if action == "labels.apply_diff":
+            result = labels_apply_diff(
+                repo=payload["repo"],
+                item_number=payload["item_number"],
+                diff=payload["diff"],
+                dry_run=dry_run,
+                runner=runner,
+            )
+        elif action == "comment.update_or_post":
+            result = comment_update_or_post(
+                repo=payload["repo"],
+                item_number=payload["item_number"],
+                body=payload["body"],
+                marker=payload.get("marker"),
+                comment_id=payload.get("comment_id"),
+                dry_run=dry_run,
+                runner=runner,
+            )
+        elif action in {"pr.assign_reviewers", "role.assign_reviewers"}:
+            result = assign_reviewers(
+                repo=payload["repo"],
+                pr_number=payload["pr_number"],
+                reviewers=payload.get("reviewers", []),
+                dry_run=dry_run,
+                runner=runner,
+            )
+        elif action == "pr.request_changes":
+            result = request_changes(
+                repo=payload["repo"],
+                pr_number=payload["pr_number"],
+                body=payload["body"],
+                dry_run=dry_run,
+                runner=runner,
+            )
+        elif action == "pr.dismiss_review":
+            result = dismiss_review(
+                repo=payload["repo"],
+                pr_number=payload["pr_number"],
+                review_id=payload["review_id"],
+                message=payload["message"],
+                dry_run=dry_run,
+                runner=runner,
+            )
+        elif action in {"pr.set_draft", "pr.mark_ready_for_review"}:
+            result = set_draft(
+                repo=payload["repo"],
+                pr_number=payload["pr_number"],
+                draft=bool(payload.get("draft", action == "pr.set_draft")),
+                dry_run=dry_run,
+                runner=runner,
+            )
+        else:
+            return {"action": action, "ok": False, "error": f"unknown provider action: {action}"}
+    except KeyError as exc:
+        return {"action": action, "ok": False, "error": f"missing payload key: {exc.args[0]}"}
+
+    ok = dry_run or all(code == 0 for code in result.get("completed", []))
+    return {**result, "ok": ok}
 
 
 def labels_apply_diff(
@@ -217,6 +354,27 @@ def _run_or_preview(
 
 def _default_runner(command: list[str]) -> subprocess.CompletedProcess:
     return subprocess.run(command, check=False, capture_output=True, text=True)
+
+
+def _append_jsonl(path: Path | str, records: list[dict]) -> None:
+    if not records:
+        return
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with target.open("a") as f:
+        for record in records:
+            f.write(json.dumps(record, sort_keys=True) + "\n")
+
+
+def _write_jsonl(path: Path | str, records: list[dict]) -> None:
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if not records:
+        target.write_text("")
+        return
+    with target.open("w") as f:
+        for record in records:
+            f.write(json.dumps(record, sort_keys=True) + "\n")
 
 
 def _now_iso() -> str:

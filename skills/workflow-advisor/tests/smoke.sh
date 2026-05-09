@@ -15,6 +15,7 @@ python3 "$ROOT/scripts/cli.py" --config "$CONFIG" lifecycle show | grep -q "spec
 python3 "$ROOT/scripts/cli.py" --config "$CONFIG" report process | grep -q "Workflow summary"
 python3 "$ROOT/scripts/cli.py" --config "$CONFIG" simulate event pull_request.opened | grep -q "Simulation"
 python3 "$ROOT/scripts/cli.py" --config "$CONFIG" reconcile --dry-run --event-name pull_request --event-payload "$EVENT" | grep -q "Proposed changes"
+python3 "$ROOT/scripts/cli.py" provider-actions list | grep -q "No pending provider actions"
 python3 "$ROOT/tests/provider_actions_smoke.py" | grep -q "provider actions smoke OK"
 python3 "$ROOT/tests/lifecycle_gates_smoke.py" | grep -q "lifecycle gates smoke OK"
 

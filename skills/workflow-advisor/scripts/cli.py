@@ -31,7 +31,7 @@ from typing import Any
 
 # Project-internal imports. These follow the layout described in
 # SKILL.md "Helpers (Python)" section.
-from helpers import config_io
+from helpers import config_io, provider_actions
 from helpers import lifecycle as lifecycle_mod
 from helpers import metrics as reports_mod
 from helpers.reconcile import (
@@ -318,6 +318,48 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     return 1 if any(f.get("severity") == "error" for f in findings) else 0
 
 
+def cmd_provider_actions(args: argparse.Namespace) -> int:
+    """List or flush queued provider actions."""
+    if args.subcommand == "list":
+        records = provider_actions.list_pending()
+        if args.format == "json":
+            print(json.dumps(records, indent=2))
+        else:
+            if not records:
+                print("No pending provider actions.")
+            for idx, record in enumerate(records, 1):
+                print(
+                    f"{idx}. {record.get('action')} "
+                    f"status={record.get('status', 'pending')} "
+                    f"reason={record.get('reason', '')}"
+                )
+        return 0
+
+    if args.subcommand == "flush":
+        result = provider_actions.flush_queue(dry_run=not args.apply)
+        if args.format == "json":
+            print(json.dumps(result, indent=2))
+        else:
+            mode = "dry-run" if result["dry_run"] else "apply"
+            print(
+                f"Provider actions {mode}: "
+                f"pending={result['pending']} "
+                f"applied={result['applied']} "
+                f"failed={result['failed']} "
+                f"remaining={result['remaining']}"
+            )
+            for item in result["results"]:
+                status = "ok" if item.get("ok") else "failed"
+                print(f"- {item.get('action')}: {status}")
+                for command in item.get("commands", []):
+                    print(f"  $ {' '.join(command)}")
+                if item.get("error"):
+                    print(f"  error: {item['error']}")
+        return 1 if result["failed"] else 0
+
+    raise ValueError(f"Unknown provider-actions subcommand: {args.subcommand}")
+
+
 # ---------------------------------------------------------------------------
 # CLI parser
 # ---------------------------------------------------------------------------
@@ -433,6 +475,16 @@ def build_parser() -> argparse.ArgumentParser:
     # doctor
     doc = sub.add_parser("doctor", help="Diagnose .workflow/ folder state")
     doc.set_defaults(func=cmd_doctor)
+
+    # provider-actions
+    pa = sub.add_parser("provider-actions", help="Inspect or flush queued provider actions")
+    pa_sub = pa.add_subparsers(dest="subcommand", required=True)
+    pa_list = pa_sub.add_parser("list")
+    pa_list.add_argument("--format", choices=["text", "json"], default="text")
+    pa_flush = pa_sub.add_parser("flush")
+    pa_flush.add_argument("--apply", action="store_true", help="Execute actions instead of dry-run")
+    pa_flush.add_argument("--format", choices=["text", "json"], default="text")
+    pa.set_defaults(func=cmd_provider_actions)
 
     return p
 

@@ -267,12 +267,28 @@ def cmd_interview(args: argparse.Namespace) -> int:
     """
     from helpers import interview as interview_mod
 
+    if args.write_default:
+        target = Path(args.output or ".workflow/config.yml")
+        if target.exists() and not args.force:
+            print(f"ERROR: {target} already exists; use --force to overwrite", file=sys.stderr)
+            return 2
+        config = interview_mod.build_default_config(args.repo)
+        config_io.save(config, path=target)
+        schema_file = target.parent / "schema_version"
+        schema_file.write_text(f"{config.get('schema_version', 1)}\n")
+        print(f"Wrote starter workflow config to {target}")
+        return 0
+
     if args.profile:
         questions = interview_mod.questions_for_profile(args.profile)
     elif args.config_key:
         questions = interview_mod.questions_for_key(args.config_key)
     else:
-        config = config_io.load_or_default(_config_path())
+        try:
+            config_path = _config_path()
+        except FileNotFoundError:
+            config_path = None
+        config = config_io.load_or_default(config_path)
         questions = interview_mod.next_questions(config)
 
     print(json.dumps(questions, indent=2))
@@ -474,6 +490,16 @@ def build_parser() -> argparse.ArgumentParser:
     iv = sub.add_parser("interview", help="Inspect or run the question bank")
     iv.add_argument("--profile", default=None)
     iv.add_argument("--config-key", default=None)
+    iv.add_argument(
+        "--write-default", action="store_true", help="Write a starter .workflow/config.yml"
+    )
+    iv.add_argument(
+        "--repo", default="unknown/unknown", help="Repository identifier for --write-default"
+    )
+    iv.add_argument("--output", default=None, help="Config path for --write-default")
+    iv.add_argument(
+        "--force", action="store_true", help="Overwrite existing --write-default output"
+    )
     iv.set_defaults(func=cmd_interview)
 
     # migrate

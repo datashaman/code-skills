@@ -172,6 +172,56 @@ def commit_answers_to_config(answers: dict) -> None:
         IN_PROGRESS_FILE.unlink()
 
 
+def build_default_config(repo_identifier: str = "unknown/unknown") -> dict:
+    """Build a valid conservative starter config for bootstrap."""
+    return {
+        "schema_version": 1,
+        "repo": {
+            "provider": "github",
+            "identifier": repo_identifier,
+            "default_branch": "main",
+            "branch_model": "github-flow",
+        },
+        "profiles": {
+            "spec-driven": {"enabled": True},
+            "testability": {"enabled": True},
+            "observability": {"enabled": True},
+            "documentation": {"enabled": False},
+            "security": {"enabled": False},
+            "accessibility": {"enabled": False},
+            "compliance": {"enabled": False},
+        },
+        "lifecycle": {
+            "composition": {"planning_arrangement": "parallel"},
+            "gates": {
+                "spec": ["spec_drafted"],
+                "review": ["tests_pass"],
+                "merge-ready": ["min_approvals_met", "no_open_blockers"],
+            },
+            "cascade": {"preserve_in_flight": True},
+        },
+        "roles": {
+            "architect": {"members": []},
+            "tech_lead": {"members": []},
+            "reviewer": {"members": []},
+        },
+        "transport": {"mode": "on_demand_only"},
+        "provider_actions": {"mode": "queue"},
+        "artifacts": {
+            "spec": {
+                "enabled": True,
+                "lives_in": "docs/specs/",
+                "template": ".workflow/templates/spec.md",
+                "front_matter_sync": True,
+            }
+        },
+        "review_policy": {"min_approvals": 1, "codeowners_required": False},
+        "classification": {"type_triggers": {}, "area_triggers": {}},
+        "ai_usage": {"spec_amendment_classify": "mechanical_only"},
+        "observability_reports": {"reports": {"actor_attribution": "roles"}},
+    }
+
+
 def run_interview(
     scope: str = "bootstrap", target: str | None = None, resume: bool = False
 ) -> None:
@@ -234,11 +284,4 @@ def _answers_as_config(answers: dict) -> dict:
 
 def _default_config() -> dict:
     """Minimal scaffold used when no config exists yet."""
-    return {
-        "schema_version": 1,
-        "repo": {"provider": "github"},
-        "profiles": {},
-        "lifecycle": {"composition": {}},
-        "roles": {},
-        "transport": {},
-    }
+    return build_default_config()

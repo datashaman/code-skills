@@ -34,6 +34,7 @@ python3 "$ROOT/tests/cascade_dependents_smoke.py" | grep -q "cascade dependents 
 python3 "$ROOT/tests/state_io_smoke.py" | grep -q "state io smoke OK"
 python3 "$ROOT/tests/poll_smoke.py" | grep -q "poll smoke OK"
 python3 "$ROOT/tests/checkpoint_smoke.py" | grep -q "checkpoint smoke OK"
+python3 "$ROOT/tests/bootstrap_smoke.py" | grep -q "bootstrap smoke OK"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT

@@ -31,6 +31,15 @@ def main() -> int:
     )
     assert "<!-- workflow-advisor:status -->" in comment["commands"][0][-1]
 
+    literal_marker = provider_actions.comment_update_or_post(
+        "example/repo",
+        42,
+        "Status changed.",
+        marker="<!-- workflow-advisor:status -->",
+    )
+    assert "<!-- <!--" not in literal_marker["commands"][0][-1]
+    assert literal_marker["commands"][0][-1].endswith("<!-- workflow-advisor:status -->")
+
     comment_calls = []
 
     def fake_comment_runner(command: list[str]) -> subprocess.CompletedProcess:

@@ -227,8 +227,9 @@ def comment_update_or_post(
     In apply mode, a marker without a concrete comment id is resolved against
     existing issue/PR comments before deciding whether to PATCH or POST.
     """
-    if marker and marker not in body:
-        body = f"{body.rstrip()}\n\n<!-- {marker} -->"
+    marker_comment = _marker_comment(marker) if marker else None
+    if marker_comment and marker_comment not in body:
+        body = f"{body.rstrip()}\n\n{marker_comment}"
 
     completed: list[int] = []
     commands: list[list[str]] = []
@@ -388,11 +389,18 @@ def _find_marker_comment_id(comments_json: str, marker: str) -> int | str | None
     except json.JSONDecodeError:
         return None
 
-    needle = marker if marker.startswith("<!--") else f"<!-- {marker} -->"
+    needle = _marker_comment(marker)
     for comment in comments:
         if needle in str(comment.get("body", "")):
             return comment.get("id")
     return None
+
+
+def _marker_comment(marker: str) -> str:
+    marker = marker.strip()
+    if marker.startswith("<!--") and marker.endswith("-->"):
+        return marker
+    return f"<!-- {marker} -->"
 
 
 def _append_jsonl(path: Path | str, records: list[dict]) -> None:

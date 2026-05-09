@@ -10,6 +10,8 @@ cd "$FIXTURE"
 
 python3 "$ROOT/scripts/cli.py" --help | grep -q "workflow-advisor"
 python3 "$ROOT/scripts/cli.py" --config "$CONFIG" doctor >/dev/null
+python3 "$ROOT/scripts/cli.py" --config "$CONFIG" status | grep -q "Active items"
+python3 "$ROOT/scripts/cli.py" --config "$CONFIG" status pr-42 | grep -q "Workflow status"
 python3 "$ROOT/scripts/cli.py" --config "$CONFIG" interview | grep -q "review_policy.codeowners_required"
 python3 "$ROOT/scripts/cli.py" --config "$CONFIG" lifecycle show | grep -q "spec"
 python3 "$ROOT/scripts/cli.py" --config "$CONFIG" report process | grep -q "Workflow summary"

@@ -43,6 +43,12 @@ def compute_report(report_type: str, time_range: str = "30d", render_as: str = "
         return _render_gate_friction(events, render_as)
     if report_type == "summary":
         return _render_summary(events, render_as)
+    if report_type == "role-load":
+        return _render_placeholder("Role load", events, render_as)
+    if report_type == "documentation":
+        return _render_placeholder("Documentation", events, render_as)
+    if report_type == "observability":
+        return _render_placeholder("Observability", events, render_as)
     return f"Unknown report type: {report_type}"
 
 
@@ -201,6 +207,20 @@ def _render_summary(events: list[dict], render_as: str) -> str:
         lines.append(f"- {stage}: {count}")
     lines.extend(["", f"Events in window: {len(events)}"])
     return "\n".join(lines)
+
+
+def _render_placeholder(title: str, events: list[dict], render_as: str) -> str:
+    payload = {"report": title.lower().replace(" ", "-"), "events_in_window": len(events)}
+    if render_as == "json":
+        return json.dumps(payload, indent=2)
+    return "\n".join(
+        [
+            f"## {title}",
+            "",
+            "Detailed aggregation for this report is not implemented yet.",
+            f"Events in window: {len(events)}",
+        ]
+    )
 
 
 def _render_comparison(a: dict, b: dict, period_a: str, period_b: str, render_as: str) -> str:

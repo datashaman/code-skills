@@ -19,6 +19,7 @@ python3 "$ROOT/scripts/cli.py" --config "$CONFIG" migrate --dry-run | grep -q "S
 python3 "$ROOT/scripts/cli.py" --config "$CONFIG" interview | grep -q "review_policy.codeowners_required"
 python3 "$ROOT/scripts/cli.py" --config "$CONFIG" lifecycle show | grep -q "spec"
 python3 "$ROOT/scripts/cli.py" --config "$CONFIG" report process | grep -q "Workflow summary"
+python3 "$ROOT/scripts/cli.py" --config "$CONFIG" report role-load | grep -q "Role load"
 python3 "$ROOT/scripts/cli.py" --config "$CONFIG" simulate event pull_request.opened | grep -q "Simulation"
 python3 "$ROOT/scripts/cli.py" --config "$CONFIG" reconcile --dry-run --event-name pull_request --event-payload "$EVENT" | grep -q "Proposed changes"
 python3 "$ROOT/scripts/cli.py" provider-actions list | grep -q "No pending provider actions"

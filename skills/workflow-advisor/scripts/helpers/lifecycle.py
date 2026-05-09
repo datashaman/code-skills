@@ -13,6 +13,7 @@ the gates required to advance. Returns pass/fail per gate with reasons.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import logging
 
 logger = logging.getLogger(__name__)
@@ -190,12 +191,44 @@ def evaluate_single_gate(gate_name: str, sidecar: dict, config: dict) -> dict:
     Evaluate one gate. Subjective gates may use LLM judgment; mechanical
     gates evaluate from sidecar fields.
     """
-    # Mechanical gates — examples
+    if gate_name == "stage_advance_no_gate":
+        return {"gate": gate_name, "result": "pass", "reason": "no gate configured"}
+
     if gate_name == "spec_drafted":
-        linked = sidecar.get("linked_artifacts", {}).get("specs", [])
-        if linked:
-            return {"gate": gate_name, "result": "pass", "reason": f"spec linked: {linked[0]}"}
-        return {"gate": gate_name, "result": "fail", "reason": "no spec linked"}
+        return _linked_artifact_gate(gate_name, sidecar, "specs", "spec")
+
+    if gate_name == "impl_plan_drafted":
+        return _linked_artifact_gate(gate_name, sidecar, "impl_plans", "implementation plan")
+
+    if gate_name == "test_plan_drafted":
+        return _linked_artifact_gate(gate_name, sidecar, "test_plans", "test plan")
+
+    if gate_name == "obs_plan_drafted_if_required":
+        if not _is_required(sidecar, config, "observability", "obs_plan_required"):
+            return {
+                "gate": gate_name,
+                "result": "pass",
+                "reason": "observability plan not required",
+            }
+        return _linked_artifact_gate(gate_name, sidecar, "obs_plans", "observability plan")
+
+    if gate_name == "spec_approved_by_architect":
+        return _approval_gate(gate_name, sidecar, artifact="specs", role="architect")
+
+    if gate_name == "impl_plan_approved":
+        return _approval_gate(gate_name, sidecar, artifact="impl_plans", role="tech_lead")
+
+    if gate_name == "test_plan_approved":
+        return _approval_gate(gate_name, sidecar, artifact="test_plans", role="test_lead")
+
+    if gate_name == "obs_plan_approved_if_required":
+        if not _is_required(sidecar, config, "observability", "obs_plan_required"):
+            return {
+                "gate": gate_name,
+                "result": "pass",
+                "reason": "observability plan not required",
+            }
+        return _approval_gate(gate_name, sidecar, artifact="obs_plans", role="sre")
 
     if gate_name == "min_approvals_met":
         min_required = config.get("review_policy", {}).get("min_approvals", 1)
@@ -224,6 +257,37 @@ def evaluate_single_gate(gate_name: str, sidecar: dict, config: dict) -> dict:
             return {"gate": gate_name, "result": "pass", "reason": "CI passed"}
         return {"gate": gate_name, "result": "fail", "reason": f"CI: {ci_status or 'unknown'}"}
 
+    if gate_name == "coverage_threshold_met":
+        coverage = sidecar.get("coverage", {})
+        required = config.get("testing", {}).get("coverage", {})
+        line_target = required.get("lines", 0)
+        branch_target = required.get("branches", 0)
+        line_actual = coverage.get("lines", 0)
+        branch_actual = coverage.get("branches", 0)
+        if line_actual >= line_target and branch_actual >= branch_target:
+            return {
+                "gate": gate_name,
+                "result": "pass",
+                "reason": f"coverage lines {line_actual}/{line_target}, branches {branch_actual}/{branch_target}",
+            }
+        return {
+            "gate": gate_name,
+            "result": "fail",
+            "reason": f"coverage lines {line_actual}/{line_target}, branches {branch_actual}/{branch_target}",
+        }
+
+    if gate_name == "codeowners_approved":
+        if not config.get("review_policy", {}).get("codeowners_required", False):
+            return {
+                "gate": gate_name,
+                "result": "pass",
+                "reason": "CODEOWNERS approval not required",
+            }
+        approvals = sidecar.get("approvals", {})
+        if sidecar.get("codeowners_approved") or approvals.get("codeowners"):
+            return {"gate": gate_name, "result": "pass", "reason": "CODEOWNERS approved"}
+        return {"gate": gate_name, "result": "fail", "reason": "CODEOWNERS approval missing"}
+
     if gate_name == "no_open_blockers":
         labels = sidecar.get("current_labels", [])
         blockers = [label for label in labels if label.startswith("blocked:")]
@@ -231,8 +295,91 @@ def evaluate_single_gate(gate_name: str, sidecar: dict, config: dict) -> dict:
             return {"gate": gate_name, "result": "pass", "reason": "no blockers"}
         return {"gate": gate_name, "result": "fail", "reason": f"blocked by: {', '.join(blockers)}"}
 
+    if gate_name == "instrumentation_present_if_required":
+        if not _is_required(sidecar, config, "observability", "instrumentation_required"):
+            return {"gate": gate_name, "result": "pass", "reason": "instrumentation not required"}
+        instrumentation = sidecar.get("instrumentation", {})
+        if (
+            instrumentation.get("present")
+            or instrumentation.get("metrics")
+            or instrumentation.get("logs")
+        ):
+            return {"gate": gate_name, "result": "pass", "reason": "instrumentation present"}
+        return {
+            "gate": gate_name,
+            "result": "fail",
+            "reason": "instrumentation required but missing",
+        }
+
+    if gate_name == "deployed":
+        status = sidecar.get("deployment_status") or sidecar.get("deployment", {}).get("status")
+        if status in {"success", "deployed"}:
+            return {"gate": gate_name, "result": "pass", "reason": f"deployment {status}"}
+        return {"gate": gate_name, "result": "fail", "reason": f"deployment {status or 'unknown'}"}
+
+    if gate_name == "baseline_metrics_captured":
+        metrics = sidecar.get("metrics", {})
+        if metrics.get("baseline_captured"):
+            return {"gate": gate_name, "result": "pass", "reason": "baseline metrics captured"}
+        return {"gate": gate_name, "result": "fail", "reason": "baseline metrics missing"}
+
+    if gate_name == "post_release_metrics_reviewed":
+        metrics = sidecar.get("metrics", {})
+        if metrics.get("post_release_reviewed"):
+            return {"gate": gate_name, "result": "pass", "reason": "post-release metrics reviewed"}
+        return {
+            "gate": gate_name,
+            "result": "fail",
+            "reason": "post-release metrics review missing",
+        }
+
+    if gate_name == "validation_window_elapsed":
+        window = sidecar.get("validation_window", {})
+        if window.get("elapsed"):
+            return {"gate": gate_name, "result": "pass", "reason": "validation window elapsed"}
+        ends_at = _parse_time(window.get("ends_at"))
+        if ends_at and ends_at <= datetime.now(timezone.utc):
+            return {"gate": gate_name, "result": "pass", "reason": "validation window elapsed"}
+        return {"gate": gate_name, "result": "fail", "reason": "validation window still open"}
+
     # Default: unknown gate; pass with caveat
     return {"gate": gate_name, "result": "unknown", "reason": "no evaluator defined"}
+
+
+def _linked_artifact_gate(gate_name: str, sidecar: dict, key: str, label: str) -> dict:
+    linked = sidecar.get("linked_artifacts", {}).get(key, [])
+    if linked:
+        return {"gate": gate_name, "result": "pass", "reason": f"{label} linked: {linked[0]}"}
+    return {"gate": gate_name, "result": "fail", "reason": f"no {label} linked"}
+
+
+def _approval_gate(gate_name: str, sidecar: dict, artifact: str, role: str) -> dict:
+    approvals = sidecar.get("approvals", {})
+    artifact_approvals = approvals.get("artifacts", {})
+    role_approvals = approvals.get("by_role", {})
+    if artifact_approvals.get(artifact):
+        return {"gate": gate_name, "result": "pass", "reason": f"{artifact} approved"}
+    if role_approvals.get(role):
+        return {"gate": gate_name, "result": "pass", "reason": f"{role} approved"}
+    return {"gate": gate_name, "result": "fail", "reason": f"{role} approval missing"}
+
+
+def _is_required(sidecar: dict, config: dict, profile: str, sidecar_key: str) -> bool:
+    if sidecar_key in sidecar:
+        return bool(sidecar[sidecar_key])
+    return bool(config.get("profiles", {}).get(profile, {}).get("enabled"))
+
+
+def _parse_time(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return parsed.replace(tzinfo=timezone.utc)
+    return parsed
 
 
 def can_advance_stage(sidecar: dict, config: dict | None = None) -> tuple[bool, list[dict]]:

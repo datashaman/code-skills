@@ -43,6 +43,7 @@ def run_poll_pass() -> dict:
     """
     config = config_io.load()
     repo = config["repo"]["identifier"]
+    default_branch = config.get("repo", {}).get("default_branch", "main")
     cursor = _load_cursor()
     new_cursor = dict(cursor)
     summary = {"events_processed": 0, "errors": []}
@@ -52,7 +53,7 @@ def run_poll_pass() -> dict:
         try:
             items = _fetch_since(repo, resource, since)
             for item in items:
-                events = _items_to_events(resource, item)
+                events = _items_to_events(resource, item, default_branch=default_branch)
                 for event in events:
                     checkpoint.reconcile_with_checkpoint(
                         intent="event_driven",
@@ -71,7 +72,7 @@ def run_poll_pass() -> dict:
 def _fetch_since(repo: str, resource: str, since: str) -> list[dict]:
     """Fetch items updated since the cursor via `gh api`."""
     if resource == "pull_requests":
-        url = f"repos/{repo}/pulls?state=all&sort=updated&direction=asc&since={since}"
+        url = f"repos/{repo}/pulls?state=all&sort=updated&direction=asc&per_page=100"
     elif resource == "issues":
         url = f"repos/{repo}/issues?state=all&sort=updated&direction=asc&since={since}"
     elif resource == "comments":
@@ -88,10 +89,15 @@ def _fetch_since(repo: str, resource: str, since: str) -> list[dict]:
         text=True,
         check=True,
     )
-    return json.loads(result.stdout)
+    items = json.loads(result.stdout)
+    if resource == "pull_requests":
+        cutoff = _parse_iso(since)
+        if cutoff is not None:
+            items = [item for item in items if _updated_after(item, cutoff)]
+    return items
 
 
-def _items_to_events(resource: str, item: dict) -> list[dict]:
+def _items_to_events(resource: str, item: dict, default_branch: str = "main") -> list[dict]:
     """
     Convert a polled item into the closest GitHub-style event payload
     so `normalize` can translate it. This is a coarser path than webhooks
@@ -133,9 +139,10 @@ def _items_to_events(resource: str, item: dict) -> list[dict]:
         return normalize.normalize_event(
             "push",
             {
-                "ref": "refs/heads/" + (item.get("branch") or "main"),
+                "ref": "refs/heads/" + default_branch,
                 "before": item.get("parents", [{}])[0].get("sha"),
                 "after": item.get("sha"),
+                "repository": {"default_branch": default_branch},
                 "commits": [
                     {"id": item.get("sha"), "message": item.get("commit", {}).get("message")}
                 ],
@@ -183,3 +190,20 @@ def _cursor_since(value: str | None) -> str:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return (parsed - timedelta(seconds=OVERLAP_SECONDS)).isoformat()
+
+
+def _parse_iso(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
+
+
+def _updated_after(item: dict, cutoff: datetime) -> bool:
+    updated = _parse_iso(item.get("updated_at"))
+    return bool(updated and updated > cutoff)

@@ -22,6 +22,7 @@ import logging
 import os
 from pathlib import Path
 
+from .. import state_io
 from ..reconcile import checkpoint
 from . import normalize
 
@@ -125,35 +126,15 @@ def _verify_signature(secret: bytes, body: bytes, signature_header: str) -> bool
 
 def _already_processed(delivery_id: str) -> bool:
     """Check if this delivery ID was already processed (idempotency)."""
-    if not delivery_id or not PROCESSED_EVENTS_FILE.exists():
+    if not delivery_id:
         return False
-    import yaml
-
-    with PROCESSED_EVENTS_FILE.open() as f:
-        records = yaml.safe_load(f) or {}
-    return delivery_id in (records.get("delivery_ids") or [])
+    return delivery_id in state_io.load_processed_events(PROCESSED_EVENTS_FILE)
 
 
 def _mark_processed(delivery_id: str) -> None:
-    """Append the delivery ID to the processed list (with TTL pruning)."""
+    """Append the delivery ID to the canonical processed-event ledger."""
     if not delivery_id:
         return
-    from datetime import datetime, timezone
-
-    import yaml
-
-    PROCESSED_EVENTS_FILE.parent.mkdir(parents=True, exist_ok=True)
-    records = {}
-    if PROCESSED_EVENTS_FILE.exists():
-        with PROCESSED_EVENTS_FILE.open() as f:
-            records = yaml.safe_load(f) or {}
-
-    delivery_ids = records.get("delivery_ids", [])
-    delivery_ids.append(delivery_id)
-    # Cap to last 1000 (TTL would be better; this is a simple ring)
-    delivery_ids = delivery_ids[-1000:]
-
-    records["delivery_ids"] = delivery_ids
-    records["last_updated"] = datetime.now(timezone.utc).isoformat()
-    with PROCESSED_EVENTS_FILE.open("w") as f:
-        yaml.dump(records, f)
+    events = state_io.load_processed_events(PROCESSED_EVENTS_FILE)
+    events.add(delivery_id)
+    state_io.save_processed_events(PROCESSED_EVENTS_FILE, events)

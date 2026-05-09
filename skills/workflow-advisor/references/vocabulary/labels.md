@@ -133,7 +133,7 @@ Per-audience doc state. Multiple audiences may have docs in flight at once.
 - `doc:sre:{state}`
 - `doc:support:{state}`
 - `doc:product:{state}`
-- `doc:end-user:{state}`
+- `doc:end_user:{state}`
 - `doc:security:{state}`
 - `doc:legal:{state}`
 

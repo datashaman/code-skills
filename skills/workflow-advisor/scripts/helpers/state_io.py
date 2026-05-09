@@ -16,7 +16,7 @@ def load_processed_events(path: Path | str) -> set[str]:
     with target.open() as f:
         data = yaml.safe_load(f) or []
     if isinstance(data, dict):
-        data = data.get("events", [])
+        data = data.get("events", data.get("delivery_ids", []))
     return {str(item) for item in data}
 
 

@@ -81,11 +81,10 @@ def find_template(name: str, profile: str | None = None) -> Path:
     Find a template by name. Prefers the repo's `.workflow/templates/`,
     falls back to the skill's bundled `references/templates/`.
     """
-    candidates = [
-        Path(".workflow/templates") / name,
-    ]
+    candidates = []
     if profile:
         candidates.append(Path(".workflow/templates") / profile / name)
+    candidates.append(Path(".workflow/templates") / name)
     candidates.append(Path("references/templates") / name)
 
     for c in candidates:

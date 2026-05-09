@@ -43,6 +43,7 @@ KNOWN_TRANSPORTS = [
     "polling",
     "on_demand_only",
 ]
+KNOWN_PROVIDER_ACTION_MODES = ["queue", "dry_run", "apply"]
 
 
 class ConfigError(Exception):
@@ -121,15 +122,29 @@ def validate(config: dict[str, Any]) -> None:
 
     # Profiles
     profiles = config.get("profiles", {})
-    for name in profiles:
+    if not isinstance(profiles, dict):
+        raise ConfigError("profiles must be a mapping.")
+    for name, profile_cfg in profiles.items():
         if name not in KNOWN_PROFILES:
             raise ConfigError(f"Unknown profile {name!r}. Known: {', '.join(KNOWN_PROFILES)}.")
+        if not isinstance(profile_cfg, dict):
+            raise ConfigError(f"profiles.{name} must be a mapping.")
+        if "enabled" in profile_cfg and not isinstance(profile_cfg["enabled"], bool):
+            raise ConfigError(f"profiles.{name}.enabled must be true or false.")
 
     # Transport
     transport = config.get("transport", {})
     mode = transport.get("mode")
     if mode not in KNOWN_TRANSPORTS:
         raise ConfigError(f"Unknown transport.mode {mode!r}. Known: {', '.join(KNOWN_TRANSPORTS)}.")
+
+    provider_actions = config.get("provider_actions", {"mode": "queue"})
+    action_mode = provider_actions.get("mode")
+    if action_mode not in KNOWN_PROVIDER_ACTION_MODES:
+        raise ConfigError(
+            f"Unknown provider_actions.mode {action_mode!r}. "
+            f"Known: {', '.join(KNOWN_PROVIDER_ACTION_MODES)}."
+        )
 
     # Repo
     repo = config.get("repo", {})

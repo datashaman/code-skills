@@ -36,6 +36,7 @@ python3 "$ROOT/tests/poll_smoke.py" | grep -q "poll smoke OK"
 python3 "$ROOT/tests/checkpoint_smoke.py" | grep -q "checkpoint smoke OK"
 python3 "$ROOT/tests/bootstrap_smoke.py" | grep -q "bootstrap smoke OK"
 python3 "$ROOT/tests/config_validation_smoke.py" | grep -q "config validation smoke OK"
+"$ROOT/tests/cli_matrix.sh" | grep -q "cli matrix OK"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT

@@ -22,6 +22,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import logging
 from pathlib import Path
+import shutil
 from typing import Any
 
 import yaml
@@ -222,6 +223,45 @@ def build_default_config(repo_identifier: str = "unknown/unknown") -> dict:
     }
 
 
+def write_default_skeleton(
+    repo_identifier: str = "unknown/unknown",
+    config_path: str | Path = ".workflow/config.yml",
+    force: bool = False,
+) -> dict:
+    """
+    Write the starter .workflow skeleton promised by the bootstrap docs.
+
+    Existing files are preserved unless force=True. Returns concrete paths so
+    callers can report what was prepared without duplicating file logic.
+    """
+    config_file = Path(config_path)
+    workflow_dir = config_file.parent
+    workflow_dir.mkdir(parents=True, exist_ok=True)
+
+    config = build_default_config(repo_identifier)
+    _write_yaml(config_file, config, force=force)
+
+    schema_file = workflow_dir / "schema_version"
+    _write_text(schema_file, f"{config.get('schema_version', 1)}\n", force=force)
+
+    readme_file = workflow_dir / "README.md"
+    _write_text(readme_file, _starter_readme(), force=force)
+
+    gitignore_file = workflow_dir / ".gitignore"
+    _write_text(gitignore_file, _starter_gitignore(), force=force)
+
+    templates_dir = workflow_dir / "templates"
+    copied_templates = _copy_templates(templates_dir, force=force)
+
+    return {
+        "config": config_file,
+        "schema_version": schema_file,
+        "readme": readme_file,
+        "gitignore": gitignore_file,
+        "templates": copied_templates,
+    }
+
+
 def run_interview(
     scope: str = "bootstrap", target: str | None = None, resume: bool = False
 ) -> None:
@@ -285,3 +325,53 @@ def _answers_as_config(answers: dict) -> dict:
 def _default_config() -> dict:
     """Minimal scaffold used when no config exists yet."""
     return build_default_config()
+
+
+def _write_yaml(path: Path, data: dict, force: bool = False) -> None:
+    if path.exists() and not force:
+        return
+    with path.open("w") as f:
+        yaml.dump(data, f, sort_keys=False)
+
+
+def _write_text(path: Path, contents: str, force: bool = False) -> None:
+    if path.exists() and not force:
+        return
+    path.write_text(contents)
+
+
+def _copy_templates(templates_dir: Path, force: bool = False) -> list[Path]:
+    source_dir = Path(__file__).resolve().parents[2] / "references" / "templates"
+    templates_dir.mkdir(parents=True, exist_ok=True)
+
+    copied: list[Path] = []
+    for source in sorted(source_dir.iterdir()):
+        if not source.is_file():
+            continue
+        target = templates_dir / source.name
+        if target.exists() and not force:
+            copied.append(target)
+            continue
+        shutil.copyfile(source, target)
+        copied.append(target)
+    return copied
+
+
+def _starter_readme() -> str:
+    return """# Workflow Advisor State
+
+This directory is the repository-local control plane for workflow-advisor.
+
+- `config.yml` defines profiles, lifecycle gates, transport, and provider action behavior.
+- `schema_version` records the local config schema version used by migrations.
+- `templates/` contains starter artifact templates copied from the skill package.
+- Runtime logs, provider action results, and local decision notes should stay out of git.
+"""
+
+
+def _starter_gitignore() -> str:
+    return """decisions/
+metrics/events.jsonl
+provider-actions/applied.jsonl
+provider-actions/failed.jsonl
+"""

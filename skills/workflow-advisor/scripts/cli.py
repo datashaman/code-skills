@@ -272,10 +272,9 @@ def cmd_interview(args: argparse.Namespace) -> int:
         if target.exists() and not args.force:
             print(f"ERROR: {target} already exists; use --force to overwrite", file=sys.stderr)
             return 2
-        config = interview_mod.build_default_config(args.repo)
-        config_io.save(config, path=target)
-        schema_file = target.parent / "schema_version"
-        schema_file.write_text(f"{config.get('schema_version', 1)}\n")
+        interview_mod.write_default_skeleton(
+            repo_identifier=args.repo, config_path=target, force=args.force
+        )
         print(f"Wrote starter workflow config to {target}")
         return 0
 

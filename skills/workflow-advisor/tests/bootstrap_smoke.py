@@ -39,6 +39,10 @@ def main() -> int:
         )
         assert out.exists()
         assert (repo / ".workflow" / "schema_version").read_text().strip() == "1"
+        assert (repo / ".workflow" / "README.md").exists()
+        assert (repo / ".workflow" / ".gitignore").exists()
+        assert (repo / ".workflow" / "templates" / "spec.md").exists()
+        assert (repo / ".workflow" / "templates" / "pull_request_template.md").exists()
 
         validate = subprocess.run(
             [sys.executable, str(cli), "--config", str(out), "doctor"],

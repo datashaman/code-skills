@@ -51,8 +51,6 @@ Known remaining hardening areas:
   flows beyond the current smoke matrix.
 - Move the LLM model string out of `helpers/llm.py` into config when LLM-backed
   classification is exercised.
-- Add user-facing examples under `references/examples/` for bootstrap,
-  event-to-playbook traces, and reconcile passes.
 
 ## Layout
 
@@ -67,7 +65,7 @@ workflow-advisor/
 │   ├── config-schema.yml             # Annotated canonical config
 │   ├── vocabulary/                   # API contract — events, actions, commands, labels, roles
 │   ├── profiles/                     # 7 profile files + composition.md
-│   ├── playbooks/                    # 10 playbook files + _dispatch.md
+│   ├── playbooks/                    # event playbooks + _dispatch.md
 │   ├── transports/                   # 6 transport modes
 │   ├── providers/github.md           # GitHub provider abstraction
 │   └── templates/                    # spec, adr, impl-plan, test-plan, obs-plan, runbook, etc.
@@ -141,94 +139,48 @@ These were debated and decided in earlier sessions:
 10. **Templates use a tiny placeholder syntax**, not Jinja, to keep
     runtime deps minimal.
 
-## Gaps to close (priority order)
+## Original gap checklist
 
-### Tier 1 — would break on first real use
+This section preserves the original handover checklist for auditability. Most
+items are now closed; use **Current hardening status** above for the live state.
 
-1. **Verify `checkpoint.py`'s public API matches what other helpers
-   call.** Other helpers call `reconcile_with_checkpoint(intent,
-   context)`. The earlier-session draft of checkpoint.py uses a
-   `Session` dataclass; the actual entry point signature wasn't
-   re-verified. Read `scripts/helpers/reconcile/checkpoint.py` end-to-end
-   first.
+### Closed
 
-2. **Wire up provider actions.** `apply.py` writes sidecars but doesn't
-   call the provider (no label apply, no comment post, no reviewer
-   assignment). Create `helpers/provider_actions.py` that wraps `gh api`
-   for: `labels_apply_diff`, `comment_update_or_post`,
-   `assign_reviewers`, `request_changes`, `dismiss_review`,
-   `set_draft`. Hook these into the checkpoint after sidecar writes.
+1. **Checkpoint public API verified.** `reconcile_with_checkpoint` exists as a
+   compatibility entry point and has smoke coverage.
+2. **Provider actions wired.** Labels, comments, reviewers, review requests,
+   review dismissals, and draft/ready transitions are queued and executable.
+3. **Push normalization fixed.** Push file lists come from commit file changes,
+   and protected-branch handling is covered.
+4. **Dispatch table aligned.** Referenced PR/review/label/protected-branch
+   playbooks exist or route to operational playbooks.
+5. **Lifecycle gate coverage expanded.** The configured profile gates used by
+   current smoke coverage are implemented.
+6. **Cascade dependents expanded.** Test plans, observability plans, threat
+   models, active PRs, ADRs, and audience docs are covered.
+7. **Audience templates added.** Architect, developer, end_user, legal,
+   operator, product, security, sre, and support templates exist.
+8. **Bootstrap skeleton added.** Bootstrap writes config, schema version,
+   README, `.gitignore`, and copied templates.
+9. **Tests added.** Smoke coverage exists for helper modules, CLI behavior,
+   packaging, and reconcile idempotency.
+10. **Examples added.** Bootstrap, event trace, and reconcile pass examples live
+    under `references/examples/`.
+11. **Package metadata added.** `pyproject.toml` defines the package and console
+    script.
+12. **Doc references resolved.** `references/cascade.md`,
+    `references/reconfigure.md`, and `references/metrics.md` exist.
+13. **Polling overlap added.** Polling uses an overlap window for missed-event
+    recovery.
 
-3. **Fix `transport/normalize.py:_h_push`.** Real GitHub push payloads
-   don't have a top-level `files` field. The helper `_files_from_push`
-   correctly aggregates from `commits[].added/modified/removed`, but
-   `_h_push` should call it and put the result on the payload, not
-   look for `payload.get("files")`. Same for PR — files come from a
-   separate API call, not the webhook payload. Fix the contract:
-   either fetch in normalize, or have playbooks fetch when needed.
+### Still Open
 
-4. **Trim `_dispatch.md` to match reality, OR stub the missing
-   playbooks.** The dispatch table currently references playbooks that
-   don't exist: `pull_request.ready_for_review.md`,
-   `pull_request.closed.md`, `pull_request.merged.md`,
-   `review.submitted.md`, `labels_changed.md`,
-   `config_changed.md`, `profiles_changed.md`,
-   `push.protected_branch.md`. Pick one approach and apply.
-
-5. **Implement the remaining ~20 gates in `lifecycle.py`.**
-   Currently only `spec_drafted`, `min_approvals_met`,
-   `no_unresolved_review_threads`, `tests_pass`, `no_open_blockers`.
-   The schema and playbooks reference about 25. Walk
-   `references/config-schema.yml` `lifecycle.gates` section and
-   implement each.
-
-### Tier 2 — would surface during normal use
-
-6. **Complete `cascade.find_dependents`.** Currently handles spec →
-   impl_plan, open PRs, related ADRs, audience docs. Missing: spec →
-   test_plan, obs_plan, threat_model. Look at the cascade rules in
-   schema and audit coverage.
-
-7. **Audience-doc templates.** Only `audience-operator.md` exists. Add:
-   developer, sre, support, product, end_user, security, legal,
-   architect. Use `audience-operator.md` as the pattern.
-
-8. **Bootstrap-installed files that aren't templated.** Bootstrap
-   references: `.workflow/.gitignore`, `.workflow/README.md`, the
-   GitHub Actions workflow yml. Either generate inline (current
-   approach, fine but fragile) or add to `references/templates/`.
-
-9. **Skill-side tests in `tests/`.** Unit tests for helpers, especially
-   classify.py, lifecycle.py composition, role_resolver.py
-   resolution. Integration tests using fixtures of normalized events.
-   Aim for coverage of the reconcile loop happy path first.
-
-10. **Examples in `references/examples/`.** Sample bootstrap
-    walkthrough output, sample event-to-playbook trace, sample reconcile
-    pass. Useful for users debugging and for new contributors.
-
-### Tier 3 — polish and follow-ups
-
-11. **`pyproject.toml`.** The github_actions workflow does
-    `pip install workflow-advisor`; no package metadata exists yet.
-
-12. **Resolve doc references.** `references/cascade.md`,
-    `references/reconfigure.md`, `references/metrics.md` are linked
-    from SKILL.md but content lives elsewhere (mostly in
-    `playbooks/operational.md`). Fix the links or split the file.
-
-13. **CLI import naming.** `cli.py` does
-    `from .helpers.reconcile import checkpoint as reconcile` then calls
-    `reconcile.reconcile_with_checkpoint(...)`. Reads badly. Prefer
-    `from .helpers.reconcile.checkpoint import reconcile_with_checkpoint`.
-
-14. **LLM model string.** `llm.py` hardcodes
-    `claude-sonnet-4-20250514`. Move to config.
-
-15. **Polling-mode missed-event recovery.** `transport/poll.py` uses
-    `_now_iso()` as the cursor on success but pulls `since=cursor`
-    from the prior pass — a 60-second overlap is mentioned in the
-    transport docs but not implemented. Add the overlap window.
+1. **LLM model config.** `helpers/llm.py` still hardcodes the model string; move
+   it to config when LLM-backed classification is exercised.
+2. **Richer event fixtures.** Add realistic fixtures for review submitted,
+   label changes, close/merge, and protected-branch push flows.
+3. **Real-repository validation.** Run against a real repo with GitHub
+   credentials before enabling automatic provider-action apply mode.
 
 ## How to verify changes
 

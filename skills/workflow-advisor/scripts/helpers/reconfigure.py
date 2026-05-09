@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 import json
+from pathlib import Path
 
 from helpers import config_io
 
@@ -30,11 +31,11 @@ def profile_change(config: dict, profile: str, enabled: bool) -> dict:
     }
 
 
-def apply(diff: dict) -> None:
+def apply(diff: dict, path: Path | str | None = None) -> None:
     """Apply a config diff produced by this module."""
     if diff.get("kind") != "profile_change":
         raise ValueError(f"Unsupported reconfigure diff kind: {diff.get('kind')}")
-    config_io.save(diff["config"])
+    config_io.save(diff["config"], path=path)
 
 
 def format_diff(diff: dict) -> str:

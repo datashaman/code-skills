@@ -82,13 +82,14 @@ def load_or_default(path: Path | str | None = None) -> dict[str, Any]:
     }
 
 
-def save(config: dict[str, Any]) -> None:
+def save(config: dict[str, Any], path: Path | str | None = None) -> None:
     """Validate and save the config."""
     validate(config)
-    WORKFLOW_DIR.mkdir(exist_ok=True)
-    with CONFIG_FILE.open("w") as f:
+    target = Path(path) if path is not None else CONFIG_FILE
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with target.open("w") as f:
         yaml.dump(config, f, sort_keys=False, default_flow_style=False)
-    logger.info(f"Saved config to {CONFIG_FILE}")
+    logger.info(f"Saved config to {target}")
 
 
 def read_schema_version() -> int:

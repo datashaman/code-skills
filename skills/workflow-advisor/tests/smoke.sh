@@ -15,6 +15,11 @@ python3 "$ROOT/scripts/cli.py" --config "$CONFIG" status pr-42 | grep -q "Workfl
 python3 "$ROOT/scripts/cli.py" --config "$CONFIG" profiles list | grep -q "spec-driven: enabled"
 python3 "$ROOT/scripts/cli.py" --config "$CONFIG" profiles list --verbose | grep -q "artifacts:"
 python3 "$ROOT/scripts/cli.py" --config "$CONFIG" profiles enable security | grep -q '"profile": "security"'
+TMP_CONFIG="$(mktemp)"
+cp "$CONFIG" "$TMP_CONFIG"
+python3 "$ROOT/scripts/cli.py" --config "$TMP_CONFIG" profiles enable security --apply >/dev/null
+grep -q "security:.*enabled: true" "$TMP_CONFIG" || grep -q "security:" "$TMP_CONFIG"
+rm -f "$TMP_CONFIG"
 python3 "$ROOT/scripts/cli.py" --config "$CONFIG" migrate --dry-run | grep -q "Schema up to date"
 python3 "$ROOT/scripts/cli.py" --config "$CONFIG" interview | grep -q "review_policy.codeowners_required"
 python3 "$ROOT/scripts/cli.py" --config "$CONFIG" lifecycle show | grep -q "spec"

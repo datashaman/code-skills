@@ -255,7 +255,7 @@ def cmd_profiles(args: argparse.Namespace) -> int:
         print()
         print("Run with --apply to commit, or modify .workflow/config.yml manually.")
         if args.apply:
-            reconfigure.apply(diff)
+            reconfigure.apply(diff, path=_config_path())
     return 0
 
 

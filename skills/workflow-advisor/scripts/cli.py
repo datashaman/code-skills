@@ -251,7 +251,7 @@ def cmd_profiles(args: argparse.Namespace) -> int:
         diff = reconfigure.profile_change(
             config=config, profile=args.profile, enabled=(args.subcommand == "enable")
         )
-        print(diff)
+        print(reconfigure.format_diff(diff))
         print()
         print("Run with --apply to commit, or modify .workflow/config.yml manually.")
         if args.apply:

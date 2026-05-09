@@ -2,8 +2,8 @@
 # Audience documentation template — operator audience.
 #
 # The documentation profile produces audience-specific docs. This is the
-# operator template; analogous templates exist for support, end_user,
-# product, security, legal_compliance.
+# operator template; analogous templates exist for developer, sre, support,
+# end_user, product, security, legal, and architect.
 #
 # Each audience template focuses on what THAT audience needs from this
 # feature, not a duplicate of the developer doc. Cross-reference where

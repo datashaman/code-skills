@@ -1,6 +1,6 @@
 ---
 name: workflow-advisor
-description: Interview a team about their development process, generate a configuration that captures it, and act as an ongoing advisor that responds to GitHub events (pushes, pull requests, issues, comments) to enforce, suggest, and adapt workflow over time. Versant in spec-driven development, with first-class support for testability, observability, role-based documentation, security, accessibility, and compliance methodologies. Use this skill when the user wants to set up team process automation, adopt SDD or related methodologies, configure GitHub workflow files from team interview, design event-driven CI/CD that adapts to project-specific roles and artifacts, or measure the effect of process changes on cycle time. Triggers on phrases like "set up team process", "workflow advisor", "configure SDD", "process automation", "team workflow", "GitHub workflow generation from interview", "spec-driven development setup", or any request to bootstrap a process for a repo from team interview.
+description: Interview a team about its development process, generate a versioned `.workflow/` configuration, and advise on GitHub events, lifecycle gates, labels, roles, and process metrics. Use when the user wants to set up team workflow automation, adopt spec-driven development, configure GitHub workflow files from an interview, design event-driven CI/CD around roles and artifacts, reconcile workflow state, or measure process changes. Triggers on "workflow advisor", "set up team process", "configure SDD", "process automation", "team workflow", "GitHub workflow generation", "spec-driven development setup", or bootstrapping repo process.
 ---
 
 # Workflow Advisor
@@ -93,8 +93,8 @@ Common intents:
 | event payload provided | reactive | `references/playbooks/{event-name}.md` |
 | "I changed the config" | reconfigure | `references/reconfigure.md` |
 | "generate a report" | metrics | `references/metrics.md` |
-| "simulate this event" | simulate | `references/playbooks/simulate.md` |
-| "what would happen if..." | dry-run | `references/playbooks/simulate.md` |
+| "simulate this event" | simulate | `references/playbooks/operational.md` |
+| "what would happen if..." | dry-run | `references/playbooks/operational.md` |
 | "amend spec X" | artifact change | `references/playbooks/spec_change.md` |
 | `/{command}` posted | slash command | `references/vocabulary/commands.md` |
 

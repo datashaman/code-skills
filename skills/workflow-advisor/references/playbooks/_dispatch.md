@@ -14,8 +14,8 @@ file-pattern filter.
 | Canonical event | Primary playbook | Notes |
 |---|---|---|
 | `repo.initialized` | `bootstrap.md` | First-run; not technically a playbook in `playbooks/` but a top-level reference. |
-| `repo.config_changed` | `playbooks/config_changed.md` | Reconcile lifecycle composition, label taxonomy. |
-| `repo.profiles_changed` | `playbooks/profiles_changed.md` | Recompose lifecycle, regenerate provider configs. |
+| `repo.config_changed` | `playbooks/operational.md` | Reconcile lifecycle composition, label taxonomy. |
+| `repo.profiles_changed` | `playbooks/operational.md` | Recompose lifecycle, regenerate provider configs. |
 | `repo.schema_migrated` | (no playbook; handled by migrator) | |
 | `push` (non-default branch) | `playbooks/push.md` (filter by changed files) | If artifact files: also `spec_change.md`. |
 | `push.protected_branch` | `playbooks/push.protected_branch.md` | Stricter checks; release detection. |
@@ -38,15 +38,15 @@ file-pattern filter.
 | `pull_request.unassigned` | (sync to sidecar) | |
 | `pull_request.title_changed` | `playbooks/pull_request.opened.md` (re-classify subset) | Re-run type classification. |
 | `pull_request.body_changed` | `playbooks/pull_request.opened.md` (re-link subset) | Re-extract spec links. |
-| `issue.opened` | `playbooks/issue.opened.md` | Triage, route, scaffold from template. |
-| `issue.closed` | `playbooks/issue.closed.md` | Archive sidecar. |
-| `issue.reopened` | `playbooks/issue.opened.md` (variant) | |
+| `issue.opened` | `playbooks/issues.md` | Triage, route, scaffold from template. |
+| `issue.closed` | `playbooks/issues.md` | Archive sidecar. |
+| `issue.reopened` | `playbooks/issues.md` (variant) | |
 | `issue.labeled` | `playbooks/labels_changed.md` | |
 | `issue.unlabeled` | `playbooks/labels_changed.md` | |
 | `issue.assigned` | (sync to sidecar) | |
 | `issue.unassigned` | (sync to sidecar) | |
-| `comment.created` | `playbooks/comment.created.md` | Routes to slash_command if body matches `/{cmd}` pattern. |
-| `comment.edited` | `playbooks/comment.created.md` (re-evaluate) | If a slash command was edited, re-process. |
+| `comment.created` | `playbooks/comments.md` | Routes to slash_command if body matches `/{cmd}` pattern. |
+| `comment.edited` | `playbooks/comments.md` (re-evaluate) | If a slash command was edited, re-process. |
 | `comment.slash_command` | `playbooks/comment.slash_command.md` | |
 | `review.thread.created` | (sync to sidecar; gate `no_unresolved_threads`) | |
 | `review.thread.resolved` | (sync to sidecar) | |

@@ -17,6 +17,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from helpers import provider_actions
 import yaml
 
 logger = logging.getLogger(__name__)
@@ -165,7 +166,7 @@ def execute_action(action: dict, config: dict) -> None:
     if name == "label_and_notify":
         # Update lifecycle sidecar with blocked label and notify
         update_lifecycle_label(target, "blocked:in-flight-conflict")
-        # Provider notification handled by the notification queue, not here
+        queue_label(target, "blocked:in-flight-conflict", config, action.get("reason", ""))
 
     elif name == "revert_to_draft":
         update_artifact_state(target, "draft")
@@ -178,6 +179,7 @@ def execute_action(action: dict, config: dict) -> None:
 
     elif name == "flag_for_review":
         update_lifecycle_label(target, "needs:review-update")
+        queue_label(target, "needs:review-update", config, action.get("reason", ""))
 
     elif name == "notify_only":
         # Pure notification — handled by notification queue
@@ -302,6 +304,25 @@ def update_lifecycle_label(target: dict, label: str) -> None:
         labels.append(label)
     with path.open("w") as f:
         yaml.dump(sidecar, f, sort_keys=False)
+
+
+def queue_label(target: dict, label: str, config: dict, reason: str = "") -> None:
+    """Queue provider label application for PR/issue targets."""
+    if target.get("type") not in {"pr", "issue"}:
+        return
+    repo = config.get("repo", {}).get("identifier")
+    item_id = target.get("id")
+    if not repo or item_id is None:
+        return
+    provider_actions.queue_action(
+        "labels.apply_diff",
+        {
+            "repo": repo,
+            "item_number": item_id,
+            "diff": {"add": [label], "remove": []},
+        },
+        reason=reason,
+    )
 
 
 def update_lifecycle_stage(target: dict, stage: str) -> None:

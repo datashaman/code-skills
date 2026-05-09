@@ -166,17 +166,23 @@ here:
 
 ## Status
 
-This is a draft. The foundations are documented, the surface area is
-enumerated, and representative examples of each file type exist. What's
-missing for a working v1:
+This is a hardened draft. The foundations are documented, the surface area is
+enumerated, helper coverage exists for the first-use workflows, and smoke tests
+exercise bootstrap, reports, provider action queues, lifecycle gates, cascade
+dependents, polling, checkpointing, package install, and reconcile idempotency.
 
-- Most playbooks have outlines but not full step-by-step content.
-- Most helpers (`scripts/helpers/`) are not yet implemented.
-- The interview question bank covers core profiles but not all of them.
-- Tests are not yet written.
-- The skill has not been exercised against a real repo end-to-end.
+Still missing before treating it as production-ready:
 
-Foundations document the intent; implementation will reveal gaps.
+- Real-repository exercise with GitHub credentials.
+- Richer event fixtures for review, label, close/merge, and protected-push flows.
+- LLM-backed classification exercised against ambiguous spec-change cases.
+- More user-facing examples as new workflows are validated.
+
+Examples:
+
+- [`references/examples/bootstrap-walkthrough.md`](references/examples/bootstrap-walkthrough.md)
+- [`references/examples/event-trace.md`](references/examples/event-trace.md)
+- [`references/examples/reconcile-pass.md`](references/examples/reconcile-pass.md)
 
 ## Contributing
 

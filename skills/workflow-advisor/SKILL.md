@@ -98,6 +98,12 @@ Common intents:
 | "amend spec X" | artifact change | `references/playbooks/spec_change.md` |
 | `/{command}` posted | slash command | `references/vocabulary/commands.md` |
 
+For concrete expected output, consult:
+
+- `references/examples/bootstrap-walkthrough.md`
+- `references/examples/event-trace.md`
+- `references/examples/reconcile-pass.md`
+
 ### Step 3: Run the relevant playbook
 
 Playbooks are in `references/playbooks/`. Each is named after the event or

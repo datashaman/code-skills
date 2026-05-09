@@ -23,6 +23,8 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from helpers import state_io
+
 logger = logging.getLogger(__name__)
 
 DECISIONS_DIR = Path(".workflow/decisions")
@@ -149,11 +151,24 @@ def run(
     context = {"config": config, "event": event or {}}
     decision_ids = log_decisions(observed, classification, applied, cascaded, context)
     log_metrics(observed, classification, applied, cascaded, context)
+    _record_processed_event(event)
     if session is not None and decision_ids:
         state_dir = session.workflow_dir / "state"
         state_dir.mkdir(parents=True, exist_ok=True)
         (state_dir / "last_decision_ref.txt").write_text(decision_ids[-1] + "\n")
     return {"decision_ids": decision_ids}
+
+
+def _record_processed_event(event: dict | None) -> None:
+    if not event:
+        return
+    event_id = event.get("id") or event.get("provider_meta", {}).get("delivery_id")
+    if not event_id:
+        return
+    path = Path(".workflow/state/processed_events.yml")
+    events = state_io.load_processed_events(path)
+    events.add(str(event_id))
+    state_io.save_processed_events(path, events)
 
 
 def _summarize(entry: dict) -> str:

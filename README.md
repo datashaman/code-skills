@@ -104,6 +104,19 @@ Trello board health audit. Queries five dimensions of card data to identify thro
 /audit-trello board="My Board" since=2024-07-01
 ```
 
+### `/github-workflow-configurator`
+
+> **⚠️ WIP — not ready for use.** This skill is under active development and is not yet stable. Don't install it on a setup you care about.
+
+Interview-driven GitHub workflow setup for agent-assisted delivery. Helps choose and configure team composition, solo-vs-peer product review, architecture review gates, comment-triggered automation, GitHub Actions events, branch/label policy, and automation authority. Produces repo-specific config/docs/templates such as `.github/sdlc-agent-workflow.yml`, Actions event routing, issue templates, and PR templates.
+
+**Usage:**
+```
+/github-workflow-configurator configure this repo for solo PO workflow
+/github-workflow-configurator set up comment-triggered agent automation
+/github-workflow-configurator design a GitHub Actions approach for PO + Architect + remote agents
+```
+
 ### `/onepager`
 
 Generate a self-contained single-file HTML demo or presentation using Alpine.js + Tailwind via CDN. Emailable, double-clickable, no build step. Aimed at business and marketing users putting an interactive thing in front of a stakeholder without booking engineering — the agent makes all edits, the user only opens the file in a browser.

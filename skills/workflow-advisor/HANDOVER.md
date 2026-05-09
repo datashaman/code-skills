@@ -9,11 +9,50 @@ observability, role-based documentation, security, accessibility, and
 compliance.
 
 The skill was designed and skeleton-drafted in chat sessions across two
-days (~12 rounds of design discussion, then drafting). It is **not
-production-ready** — it's a coherent skeleton with most reference docs
-real, vocabulary registries complete, and Python helpers as working
-stubs. The next phase is filling implementation gaps and testing
-against a real repo.
+days (~12 rounds of design discussion, then drafting). It began as a
+coherent skeleton with most reference docs real, vocabulary registries
+complete, and Python helpers as working stubs. A follow-up hardening pass
+has closed the first-use blockers listed below and added smoke coverage.
+
+## Current hardening status
+
+Completed since the original handover:
+
+- Checkpoint public API now has a compatibility entry point and smoke coverage.
+- Provider actions are queued, listed, flushed, dry-run capable, and executable for
+  labels, comments, reviewers, review requests, review dismissals, and draft/ready
+  transitions.
+- Marker comments are idempotent: apply mode looks up existing marker comments
+  before deciding between PATCH and POST.
+- Push normalization uses commit file lists and emits protected-branch events with
+  an overlap-safe polling cursor.
+- Dispatch references now point at existing playbooks for the originally missing
+  PR/review/label/protected-branch flows.
+- Lifecycle gates cover the configured profile gates used by the smoke suite,
+  including testability and observability gates.
+- Cascade dependency coverage includes test plans, observability plans, threat
+  models, and audience docs.
+- Audience templates exist for architect, developer, end_user, legal, operator,
+  product, security, sre, and support.
+- Bootstrap writes a usable `.workflow/` skeleton: config, schema version,
+  README, `.gitignore`, and copied templates.
+- Package metadata and console entry point exist, with package smoke coverage.
+- Reports now render JSON correctly and include useful role-load, documentation,
+  and observability summaries.
+- The smoke suite covers CLI matrix, package install, provider actions, lifecycle
+  gates, cascade dependents, state I/O, polling, checkpointing, bootstrap,
+  config validation, templates, reports, and reconcile idempotency.
+
+Known remaining hardening areas:
+
+- Run against a real repository with GitHub credentials and review the queued
+  provider actions before enabling `provider_actions.mode: apply`.
+- Add realistic event fixtures for review, label, close/merge, and protected-push
+  flows beyond the current smoke matrix.
+- Move the LLM model string out of `helpers/llm.py` into config when LLM-backed
+  classification is exercised.
+- Add user-facing examples under `references/examples/` for bootstrap,
+  event-to-playbook traces, and reconcile passes.
 
 ## Layout
 

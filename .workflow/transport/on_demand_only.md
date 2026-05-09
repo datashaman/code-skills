@@ -74,6 +74,6 @@ reactive in addition to on-demand.
 
 ## See also
 
-- `references/transports/github_actions.md` — for graduating to default
+- `../../skills/workflow-advisor/references/transports/github_actions.md` — for graduating to default
   reactive mode.
-- `references/transports/polling.md` — for half-reactive mode.
+- `../../skills/workflow-advisor/references/transports/polling.md` — for half-reactive mode.

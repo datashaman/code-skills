@@ -28,7 +28,7 @@ last_change:
   rationale: null
 ---
 
-# {Title}
+# {{ title }}
 
 > One-paragraph summary of what this spec proposes. A reader should be
 > able to understand the gist of the change from this paragraph alone.

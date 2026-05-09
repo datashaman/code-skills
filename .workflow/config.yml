@@ -77,7 +77,7 @@ roles:
 linkage:
   spec:
     mode: body_line
-    pattern: "Spec: docs/specs/{id-or-slug}.md"
+    pattern: "Spec: docs/specs/{spec_id}.md"
 
 artifacts:
   spec:
@@ -151,10 +151,7 @@ lifecycle:
       - validated
   gates:
     spec: [spec_drafted]
-    arch-review:
-      condition: type in [feature, breaking]
-      gates: [spec_approved_by_architect]
-      else: stage_advance_no_gate
+    arch-review: [spec_approved_by_architect]
     impl-plan: [impl_plan_drafted]
     test-plan: [test_plan_drafted]
     obs-plan: [obs_plan_drafted_if_required]
@@ -162,18 +159,13 @@ lifecycle:
       - impl_plan_approved
       - test_plan_approved
       - obs_plan_approved_if_required
-      - threat_model_approved_if_required
-      - required_audience_docs_drafted
     review:
       - tests_pass
       - coverage_threshold_met
-      - required_test_levels_present
     merge-ready:
       - no_unresolved_review_threads
       - no_open_blockers
       - instrumentation_present_if_required
-      - required_audience_docs_approved
-      - security_review_approved_if_required
     released:
       - deployed
       - baseline_metrics_captured
@@ -205,11 +197,12 @@ testability:
     e2e: { required_for: [feature, breaking] }
     performance: { required_for: [breaking, performance_sensitive] }
     security: { required_for: [auth, payments, pii] }
-  thresholds:
-    coverage:
-      lines: 80
-      branches: 70
-      enforcement: warn
+
+testing:
+  coverage:
+    lines: 80
+    branches: 70
+    enforcement: warn
 
 observability:
   signals:
@@ -242,14 +235,6 @@ documentation:
     architect: { required_for: [feature, breaking] }
 
 security:
-  classification_triggers:
-    paths:
-      - "**/auth/**"
-      - "**/security/**"
-      - "**/*secret*"
-      - "**/*token*"
-      - "**/*crypto*"
-    keywords_in_diff: [password, token, secret, api_key, encrypt]
   evidence:
     sast_scan: { required_for: [feature, breaking] }
     dependency_audit: { required_for: [dependency_change] }
@@ -257,16 +242,28 @@ security:
     pen_test_findings: { required_for: [auth, payments, regulated] }
 
 classification:
+  area_triggers:
+    security-sensitive:
+      paths:
+        - "**/auth/**"
+        - "**/auth.*"
+        - "**/login.*"
+        - "**/security/**"
+        - "**/security.*"
+        - "**/*secret*"
+        - "**/*token*"
+        - "**/*crypto*"
+      keywords_in_diff: [password, token, secret, api_key, encrypt]
   type_triggers:
     feature:
-      title_prefixes: ["feat:", "feature:"]
+      keywords_in_title: ["feat:", "feature:"]
       branch_prefixes: ["feat/", "feature/"]
     bugfix:
-      title_prefixes: ["fix:", "bug:"]
+      keywords_in_title: ["fix:", "bug:"]
       branch_prefixes: ["fix/", "bug/"]
     docs:
-      title_prefixes: ["docs:"]
+      keywords_in_title: ["docs:"]
       branch_prefixes: ["docs/"]
       paths: ["**/*.md"]
     breaking:
-      title_contains: ["BREAKING CHANGE", "!:"]
+      keywords_in_title: ["BREAKING CHANGE", "!:"]

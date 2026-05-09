@@ -60,4 +60,4 @@ Anything reviewers should pay particular attention to.
 
 ---
 
-<sub>Workflow status will be posted as a sticky comment shortly. Run `/workflow-help` for available commands.</sub>
+<sub>Workflow status is available after a manual `workflow-advisor` run. Run `/workflow-help` for available commands when reconciling comments on demand.</sub>

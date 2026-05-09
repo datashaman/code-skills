@@ -24,7 +24,7 @@ Accessibility and compliance are disabled for now.
 PRs should reference specs with a body line:
 
 ```text
-Spec: docs/specs/0042-example.md
+Spec: docs/specs/0042.md
 ```
 
 ## Local Use

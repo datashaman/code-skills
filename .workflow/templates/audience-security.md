@@ -21,7 +21,7 @@ Auth, authorization, data, secrets, dependency, or infrastructure impact.
 
 ## Threat Model Link
 
-See: [{{ spec_id }} threat model](../../security/{{ spec_id }}.md)
+See: [{{ spec_id }} threat model](../../security/threat-models/{{ spec_id }}.md)
 
 ## Controls
 

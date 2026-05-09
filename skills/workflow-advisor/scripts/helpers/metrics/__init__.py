@@ -44,11 +44,11 @@ def compute_report(report_type: str, time_range: str = "30d", render_as: str = "
     if report_type == "summary":
         return _render_summary(events, render_as)
     if report_type == "role-load":
-        return _render_placeholder("Role load", events, render_as)
+        return _render_role_load(events, render_as)
     if report_type == "documentation":
-        return _render_placeholder("Documentation", events, render_as)
+        return _render_documentation(events, render_as)
     if report_type == "observability":
-        return _render_placeholder("Observability", events, render_as)
+        return _render_observability(events, render_as)
     return f"Unknown report type: {report_type}"
 
 
@@ -191,11 +191,8 @@ def _render_gate_friction(events: list[dict], render_as: str) -> str:
 
 def _render_summary(events: list[dict], render_as: str) -> str:
     by_stage = defaultdict(int)
-    import yaml
 
-    for f in LIFECYCLE_ACTIVE.glob("*.yml") if LIFECYCLE_ACTIVE.is_dir() else []:
-        with f.open() as fp:
-            sidecar = yaml.safe_load(fp) or {}
+    for sidecar in _load_sidecars(active_only=True):
         by_stage[sidecar.get("stage", "unknown")] += 1
 
     if render_as == "json":
@@ -209,18 +206,169 @@ def _render_summary(events: list[dict], render_as: str) -> str:
     return "\n".join(lines)
 
 
-def _render_placeholder(title: str, events: list[dict], render_as: str) -> str:
-    payload = {"report": title.lower().replace(" ", "-"), "events_in_window": len(events)}
+def _render_role_load(events: list[dict], render_as: str) -> str:
+    sidecars = _load_sidecars(active_only=True)
+    by_actor: dict[str, int] = defaultdict(int)
+    by_stage: dict[str, int] = defaultdict(int)
+
+    for sidecar in sidecars:
+        by_stage[sidecar.get("stage", "unknown")] += 1
+        for actor in _sidecar_actors(sidecar):
+            by_actor[actor] += 1
+
+    payload = {
+        "active_items": len(sidecars),
+        "events_in_window": len(events),
+        "items_by_stage": dict(sorted(by_stage.items())),
+        "items_by_actor": dict(sorted(by_actor.items())),
+    }
+    if render_as == "json":
+        return json.dumps(payload, indent=2)
+    lines = ["## Role load", "", f"Active items: {payload['active_items']}", ""]
+    lines.append("### Items by actor")
+    if by_actor:
+        for actor, count in sorted(by_actor.items()):
+            lines.append(f"- {actor}: {count}")
+    else:
+        lines.append("- No actors recorded on active sidecars.")
+    lines.extend(["", "### Items by stage"])
+    for stage, count in sorted(by_stage.items()):
+        lines.append(f"- {stage}: {count}")
+    lines.append(f"\nEvents in window: {len(events)}")
+    return "\n".join(lines)
+
+
+def _render_documentation(events: list[dict], render_as: str) -> str:
+    sidecars = _load_sidecars(active_only=True)
+    linked: dict[str, int] = defaultdict(int)
+    items_with_links = 0
+
+    for sidecar in sidecars:
+        artifacts = sidecar.get("linked_artifacts") or {}
+        if artifacts:
+            items_with_links += 1
+        for kind, values in artifacts.items():
+            linked[kind] += len(values if isinstance(values, list) else [values])
+
+    payload = {
+        "active_items": len(sidecars),
+        "items_with_linked_artifacts": items_with_links,
+        "linked_artifacts": dict(sorted(linked.items())),
+        "artifacts_observed": sum(int(e.get("artifacts_observed") or 0) for e in events),
+        "artifacts_changed": sum(int(e.get("artifacts_changed") or 0) for e in events),
+        "events_in_window": len(events),
+    }
+    if render_as == "json":
+        return json.dumps(payload, indent=2)
+    lines = [
+        "## Documentation",
+        "",
+        f"Active items with linked artifacts: {items_with_links}/{len(sidecars)}",
+        f"Artifacts observed in window: {payload['artifacts_observed']}",
+        f"Artifacts changed in window: {payload['artifacts_changed']}",
+        "",
+        "### Linked artifacts",
+    ]
+    if linked:
+        for kind, count in sorted(linked.items()):
+            lines.append(f"- {kind}: {count}")
+    else:
+        lines.append("- No linked artifacts recorded on active sidecars.")
+    lines.append(f"\nEvents in window: {len(events)}")
+    return "\n".join(lines)
+
+
+def _render_observability(events: list[dict], render_as: str) -> str:
+    sidecars = _load_sidecars(active_only=True)
+    metrics_enabled = 0
+    baseline_captured = 0
+    post_release_reviewed = 0
+
+    for sidecar in sidecars:
+        instrumentation = sidecar.get("instrumentation") or {}
+        metrics = sidecar.get("metrics") or {}
+        if instrumentation.get("metrics") or metrics:
+            metrics_enabled += 1
+        if metrics.get("baseline_captured"):
+            baseline_captured += 1
+        if metrics.get("post_release_reviewed"):
+            post_release_reviewed += 1
+
+    payload = {
+        "active_items": len(sidecars),
+        "events_in_window": len(events),
+        "lifecycle_items_observed": sum(
+            int(e.get("lifecycle_items_observed") or 0) for e in events
+        ),
+        "sidecars_written": sum(int(e.get("sidecars_written") or 0) for e in events),
+        "lifecycle_updated": sum(int(e.get("lifecycle_updated") or 0) for e in events),
+        "cascades_failed": sum(int(e.get("cascades_failed") or 0) for e in events),
+        "metrics_enabled_items": metrics_enabled,
+        "baseline_metrics_captured": baseline_captured,
+        "post_release_metrics_reviewed": post_release_reviewed,
+    }
     if render_as == "json":
         return json.dumps(payload, indent=2)
     return "\n".join(
         [
-            f"## {title}",
+            "## Observability",
             "",
-            "Detailed aggregation for this report is not implemented yet.",
-            f"Events in window: {len(events)}",
+            f"Events in window: {payload['events_in_window']}",
+            f"Lifecycle items observed: {payload['lifecycle_items_observed']}",
+            f"Sidecars written: {payload['sidecars_written']}",
+            f"Lifecycle updates: {payload['lifecycle_updated']}",
+            f"Cascades failed: {payload['cascades_failed']}",
+            "",
+            "### Metrics gates",
+            f"- Metrics enabled items: {metrics_enabled}",
+            f"- Baseline metrics captured: {baseline_captured}",
+            f"- Post-release metrics reviewed: {post_release_reviewed}",
         ]
     )
+
+
+def _load_sidecars(active_only: bool = False) -> list[dict]:
+    import yaml
+
+    roots = [LIFECYCLE_ACTIVE] if active_only else [LIFECYCLE_ACTIVE, LIFECYCLE_ARCHIVE]
+    sidecars = []
+    for root in roots:
+        if not root.is_dir():
+            continue
+        for path in root.rglob("*.yml"):
+            with path.open() as f:
+                sidecars.append(yaml.safe_load(f) or {})
+    return sidecars
+
+
+def _sidecar_actors(sidecar: dict) -> set[str]:
+    actors: set[str] = set()
+    for key in ("owner", "assignee"):
+        value = sidecar.get(key)
+        if isinstance(value, str) and value:
+            actors.add(value)
+
+    for key in ("owners", "assignees", "reviewers"):
+        value = sidecar.get(key)
+        if isinstance(value, list):
+            actors.update(str(v) for v in value if v)
+        elif isinstance(value, dict):
+            for nested in value.values():
+                if isinstance(nested, list):
+                    actors.update(str(v) for v in nested if v)
+                elif nested:
+                    actors.add(str(nested))
+        elif value:
+            actors.add(str(value))
+
+    approvals = sidecar.get("approvals") or {}
+    received = approvals.get("received")
+    if isinstance(received, list):
+        actors.update(str(v) for v in received if v)
+    elif received:
+        actors.add(str(received))
+
+    return actors
 
 
 def _render_comparison(a: dict, b: dict, period_a: str, period_b: str, render_as: str) -> str:

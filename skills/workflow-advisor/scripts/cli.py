@@ -122,7 +122,16 @@ def cmd_reconcile(args: argparse.Namespace) -> int:
         )
         # checkpoint.session commits on context exit if any writes occurred.
 
-    print(json.dumps({"event": "reconcile.completed", "commit": session.commit_sha}))
+    provider_result = _handle_provider_actions_after_reconcile(config)
+    print(
+        json.dumps(
+            {
+                "event": "reconcile.completed",
+                "commit": session.commit_sha,
+                "provider_actions": provider_result,
+            }
+        )
+    )
     return 0
 
 
@@ -543,6 +552,39 @@ def _print_dry_run_summary(proposed: dict, cascade: dict) -> None:
         print("\nCascade phase:")
         for effect in cascade.get("effects", []):
             print(f"  {effect['target']}: {effect['action']} ({effect.get('reason', '')})")
+
+
+def _handle_provider_actions_after_reconcile(config: dict) -> dict:
+    """
+    Apply provider-action policy after folder state has been reconciled.
+
+    Modes:
+      queue   - leave actions pending; report count.
+      dry_run - preview flush commands; leave actions pending.
+      apply   - execute via gh and archive successes/failures.
+    """
+    mode = config.get("provider_actions", {}).get("mode", "queue")
+    pending = provider_actions.list_pending()
+    if mode == "queue":
+        return {"mode": mode, "pending": len(pending)}
+    if mode == "dry_run":
+        result = provider_actions.flush_queue(dry_run=True)
+        return {
+            "mode": mode,
+            "pending": result["pending"],
+            "remaining": result["remaining"],
+            "failed": result["failed"],
+        }
+    if mode == "apply":
+        result = provider_actions.flush_queue(dry_run=False)
+        return {
+            "mode": mode,
+            "pending": result["pending"],
+            "applied": result["applied"],
+            "failed": result["failed"],
+            "remaining": result["remaining"],
+        }
+    return {"mode": mode, "pending": len(pending), "warning": "unknown provider_actions.mode"}
 
 
 # ---------------------------------------------------------------------------

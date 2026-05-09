@@ -394,6 +394,16 @@ transport:
     runs_on: ubuntu-latest
 
 # ---------------------------------------------------------------------------
+# Provider actions - how queued GitHub mutations are handled
+# ---------------------------------------------------------------------------
+#
+# Folder reconciliation always happens first. Provider actions are queued as
+# explicit records, then handled by this policy.
+
+provider_actions:
+  mode: queue   # queue | dry_run | apply
+
+# ---------------------------------------------------------------------------
 # Observability and reporting
 # ---------------------------------------------------------------------------
 

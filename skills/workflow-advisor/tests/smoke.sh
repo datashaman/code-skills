@@ -30,5 +30,7 @@ git -c user.name=test -c user.email=test@example.com commit -qm "fixture"
 python3 "$ROOT/scripts/cli.py" --config "$TMP/.workflow/config.yml" reconcile --event-name pull_request --event-payload "$EVENT" | grep -q "reconcile.completed"
 test -f ".workflow/artifacts/specs/demo.yml"
 test -f ".workflow/metrics/events.jsonl"
+test -f ".workflow/provider-actions/pending.jsonl"
+grep -q "labels.apply_diff" ".workflow/provider-actions/pending.jsonl"
 
 echo "workflow-advisor smoke OK"

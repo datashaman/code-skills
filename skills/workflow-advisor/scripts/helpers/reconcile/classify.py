@@ -94,6 +94,13 @@ def run(config: dict, observed: dict) -> dict:
     for art in observed.get("artifacts", []):
         if not art.get("changed"):
             continue
+        if art.get("sidecar"):
+            classifications[f"artifact:{art['type']}:{art['id']}"] = {
+                "classification": "substantive",
+                "rationale": "tracked artifact content hash changed",
+                "method": "mechanical",
+            }
+            continue
         path = Path(art["path"])
         after = path.read_text() if path.exists() else ""
         cls = classify_artifact_change(

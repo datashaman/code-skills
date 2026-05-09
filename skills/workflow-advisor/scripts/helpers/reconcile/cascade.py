@@ -38,7 +38,7 @@ def compute(observation: dict, classifications: dict, config: dict) -> dict:
         }
     """
     plan: dict = {"actions": [], "in_flight_conflicts": [], "preserved_items": []}
-    cascade_cfg = config.get("cascade", {})
+    cascade_cfg = config.get("cascade") or config.get("lifecycle", {}).get("cascade", {})
     preserve = cascade_cfg.get("preserve_in_flight", True)
 
     # For each substantively/structurally changed artifact, look up rule

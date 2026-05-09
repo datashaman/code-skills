@@ -25,6 +25,7 @@ python3 "$ROOT/scripts/cli.py" provider-actions list | grep -q "No pending provi
 python3 "$ROOT/tests/provider_actions_smoke.py" | grep -q "provider actions smoke OK"
 python3 "$ROOT/tests/lifecycle_gates_smoke.py" | grep -q "lifecycle gates smoke OK"
 python3 "$ROOT/tests/cascade_dependents_smoke.py" | grep -q "cascade dependents smoke OK"
+python3 "$ROOT/tests/state_io_smoke.py" | grep -q "state io smoke OK"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT

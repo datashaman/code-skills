@@ -1,0 +1,269 @@
+schema_version: 1
+
+repo:
+  provider: github
+  identifier: datashaman/code-skills
+  default_branch: main
+  branch_model: trunk-based
+
+profiles:
+  spec-driven: { enabled: true }
+  testability: { enabled: true }
+  observability: { enabled: true }
+  documentation: { enabled: true }
+  security: { enabled: true }
+  accessibility: { enabled: false }
+  compliance: { enabled: false }
+
+transport:
+  mode: on_demand_only
+
+review_policy:
+  min_approvals: 0
+  codeowners_required: false
+  dismiss_stale_reviews_on_push: false
+  require_resolved_threads_to_merge: true
+  review_assistant: copilot
+
+roles:
+  spec_author:
+    description: Anyone who drafts a spec
+    members: any
+  architect:
+    description: Approves specs and architectural decisions
+    members:
+      - { type: github, handle: marlinf, name: "Marlin Forbes" }
+  tech_lead:
+    description: Approves implementation plans and workflow overrides
+    members:
+      - { type: github, handle: marlinf, name: "Marlin Forbes" }
+  reviewer:
+    description: Human code review role
+    members: []
+  maintainer:
+    description: Releases and merges to main
+    members:
+      - { type: github, handle: marlinf, name: "Marlin Forbes" }
+  test_lead:
+    description: Approves test plans and test evidence
+    members:
+      - { type: github, handle: marlinf, name: "Marlin Forbes" }
+  sre:
+    description: Approves observability plans and release validation
+    members:
+      - { type: github, handle: marlinf, name: "Marlin Forbes" }
+  security:
+    description: Approves threat models and security reviews
+    members:
+      - { type: github, handle: marlinf, name: "Marlin Forbes" }
+  documentation:
+    description: Owns documentation quality and audience docs
+    members:
+      - { type: github, handle: marlinf, name: "Marlin Forbes" }
+  support:
+    description: Support-facing documentation audience
+    members: []
+  product:
+    description: Product and release communication audience
+    members:
+      - { type: github, handle: marlinf, name: "Marlin Forbes" }
+  end_user_advocate:
+    description: End-user documentation audience
+    members: []
+  legal_compliance:
+    description: Legal and compliance documentation audience
+    members: []
+
+linkage:
+  spec:
+    mode: body_line
+    pattern: "Spec: docs/specs/{spec_id}.md"
+
+artifacts:
+  spec:
+    enabled: true
+    required_for: [feature, breaking, api_change]
+    template: .workflow/templates/spec.md
+    lives_in: docs/specs/
+    sidecar: .workflow/artifacts/specs/
+    approval_required_from: [architect]
+    front_matter_sync: true
+  adr:
+    enabled: true
+    required_for: [architectural_decision, breaking]
+    template: .workflow/templates/adr.md
+    lives_in: docs/adr/
+    sidecar: .workflow/artifacts/adrs/
+    approval_required_from: [architect, tech_lead]
+  impl_plan:
+    enabled: true
+    required_for: [feature, breaking]
+    template: .workflow/templates/impl-plan.md
+    lives_in: docs/impl-plans/
+    sidecar: .workflow/artifacts/impl-plans/
+    approval_required_from: [tech_lead]
+  test_plan:
+    enabled: true
+    required_for: [feature, breaking]
+    template: .workflow/templates/test-plan.md
+    lives_in: docs/test-plans/
+    sidecar: .workflow/artifacts/test-plans/
+    approval_required_from: [test_lead]
+  obs_plan:
+    enabled: true
+    required_for: [feature, breaking]
+    template: .workflow/templates/obs-plan.md
+    lives_in: docs/observability/
+    sidecar: .workflow/artifacts/obs-plans/
+    approval_required_from: [sre]
+  runbook:
+    enabled: true
+    required_for: [user_facing, on_call_supported]
+    template: .workflow/templates/runbook.md
+    lives_in: docs/runbooks/
+    sidecar: .workflow/artifacts/runbooks/
+    approval_required_from: [sre]
+  threat_model:
+    enabled: true
+    required_for: [auth, payments, pii, network_facing, security_sensitive]
+    template: .workflow/templates/threat-model.md
+    lives_in: docs/security/threat-models/
+    sidecar: .workflow/artifacts/threat-models/
+    approval_required_from: [security]
+  audience_doc:
+    enabled: true
+    required_for: [feature, breaking, user_facing, api_change]
+    template_dir: .workflow/templates/
+    lives_in: docs/audience/
+    sidecar: .workflow/artifacts/audience-docs/
+    approval_required_from: [documentation]
+
+lifecycle:
+  composition:
+    sequence:
+      - spec
+      - arch-review
+      - [impl-plan, test-plan, obs-plan]
+      - implementation
+      - review
+      - merge-ready
+      - released
+      - validated
+  gates:
+    spec: [spec_drafted]
+    arch-review: [spec_approved_by_architect]
+    impl-plan: [impl_plan_drafted]
+    test-plan: [test_plan_drafted]
+    obs-plan: [obs_plan_drafted_if_required]
+    implementation:
+      - impl_plan_approved
+      - test_plan_approved
+      - obs_plan_approved_if_required
+    review:
+      - tests_pass
+      - coverage_threshold_met
+    merge-ready:
+      - no_unresolved_review_threads
+      - no_open_blockers
+      - instrumentation_present_if_required
+    released:
+      - deployed
+      - baseline_metrics_captured
+    validated:
+      - post_release_metrics_reviewed
+      - validation_window_elapsed
+  cascade:
+    preserve_in_flight: true
+    spec_substantive_change:
+      impl_plan: revert_to_draft
+      test_plan: revert_to_draft
+      obs_plan: revert_to_draft
+      threat_model: revert_to_draft
+      open_prs: notify_and_label
+      related_adrs: flag_for_review
+    spec_editorial_change:
+      impl_plan: no_change
+      test_plan: no_change
+      obs_plan: no_change
+      threat_model: no_change
+      open_prs: notify_only
+      related_adrs: no_change
+
+testability:
+  levels:
+    unit: required
+    integration: required
+    contract: { required_for: [api_change, breaking] }
+    e2e: { required_for: [feature, breaking] }
+    performance: { required_for: [breaking, performance_sensitive] }
+    security: { required_for: [auth, payments, pii] }
+
+testing:
+  coverage:
+    lines: 80
+    branches: 70
+    enforcement: warn
+
+observability:
+  signals:
+    logs: required
+    metrics: required
+    traces: { required_for: [feature, performance_sensitive] }
+    events: { required_for: [user_facing, async_workflow] }
+    alerts: { required_for: [feature, breaking] }
+  post_release:
+    validation_window_days: 7
+    require_metrics_review: true
+    require_runbook_dry_run: optional
+
+documentation:
+  generation:
+    release_notes:
+      mode: ai_drafted_human_approved
+    api_reference:
+      mode: extracted_from_code
+    others:
+      mode: human_drafted_from_template
+  audiences:
+    developer: { required_for: [feature, breaking, api_change] }
+    operator: { required_for: [feature, breaking, infrastructure_change] }
+    sre: { required_for: [feature, breaking] }
+    support: { required_for: [user_facing] }
+    security: { required_for: [auth, payments, pii, security_sensitive] }
+    product: { required_for: [feature, user_facing] }
+    end_user: { required_for: [user_facing, breaking] }
+    architect: { required_for: [feature, breaking] }
+
+security:
+  evidence:
+    sast_scan: { required_for: [feature, breaking] }
+    dependency_audit: { required_for: [dependency_change] }
+    secret_scan: required
+    pen_test_findings: { required_for: [auth, payments, regulated] }
+
+classification:
+  area_triggers:
+    security-sensitive:
+      paths:
+        - "**/auth/**"
+        - "**/auth.*"
+        - "**/login.*"
+        - "**/security/**"
+        - "**/security.*"
+        - "**/*secret*"
+        - "**/*token*"
+        - "**/*crypto*"
+      keywords_in_diff: [password, token, secret, api_key, encrypt]
+  type_triggers:
+    feature:
+      keywords_in_title: ["feat:", "feature:"]
+      branch_prefixes: ["feat/", "feature/"]
+    bugfix:
+      keywords_in_title: ["fix:", "bug:"]
+      branch_prefixes: ["fix/", "bug/"]
+    docs:
+      keywords_in_title: ["docs:"]
+      branch_prefixes: ["docs/"]
+      paths: ["**/*.md"]
+    breaking:
+      keywords_in_title: ["BREAKING CHANGE", "!:"]

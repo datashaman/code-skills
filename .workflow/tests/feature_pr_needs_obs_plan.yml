@@ -1,0 +1,10 @@
+name: feature PRs need an approved observability plan
+given:
+  pr:
+    type: feature
+    spec_state: approved
+    obs_plan_state: null
+when: pull_request.opened
+then:
+  labels_added: [needs:obs-plan]
+  stage: obs-plan

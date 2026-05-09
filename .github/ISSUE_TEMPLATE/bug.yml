@@ -1,0 +1,50 @@
+name: Bug report
+description: Report a defect — something that's not working as it should.
+title: "[bug] "
+labels: ["type:bugfix"]
+body:
+  - type: textarea
+    id: what_happened
+    attributes:
+      label: What happened?
+      description: What did you see?
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: How can someone else see what you saw?
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Build, tag, commit SHA, or "main as of {date}".
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: Best guess — the team will adjust if needed.
+      options:
+        - low (annoyance)
+        - medium (affects some users)
+        - high (affects many users)
+        - critical (data loss / outage / security)
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Workaround
+      description: If you found one — useful to others while a fix is in flight.

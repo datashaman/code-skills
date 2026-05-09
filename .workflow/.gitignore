@@ -1,0 +1,4 @@
+decisions/
+metrics/events.jsonl
+state/
+!.gitignore

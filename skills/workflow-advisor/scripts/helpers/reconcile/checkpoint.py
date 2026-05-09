@@ -162,6 +162,58 @@ def commit_message_for(session: Session) -> str:
     return _build_commit_message(session)
 
 
+def reconcile_with_checkpoint(intent: str, context: dict) -> dict:
+    """
+    Compatibility entry point for transports that need to reconcile one event.
+    """
+    from helpers import config_io
+    from helpers.reconcile import apply as apply_phase
+    from helpers.reconcile import cascade as cascade_phase
+    from helpers.reconcile import classify as classify_phase
+    from helpers.reconcile import log as log_phase
+    from helpers.reconcile import observe as observe_phase
+
+    config = context.get("config") or config_io.load()
+    event = context.get("event")
+    scope = "event" if intent == "event_driven" else context.get("scope", "full")
+    observed = observe_phase.run(config=config, event=event, scope=scope)
+    classification = classify_phase.run(config=config, observed=observed)
+
+    with session(config=config, event=event) as sess:
+        applied = apply_phase.run(
+            config=config,
+            observed=observed,
+            classification=classification,
+            session=sess,
+        )
+        cascaded = cascade_phase.run(
+            config=config,
+            observed=observed,
+            classification=classification,
+            applied=applied,
+            session=sess,
+        )
+        logged = log_phase.run(
+            config=config,
+            event=event,
+            observed=observed,
+            classification=classification,
+            applied=applied,
+            cascaded=cascaded,
+            session=sess,
+        )
+
+    return {
+        "observed": observed,
+        "classification": classification,
+        "applied": applied,
+        "cascaded": cascaded,
+        "logged": logged,
+        "commit": sess.commit_sha,
+        "no_op": sess.no_op,
+    }
+
+
 # ---------------------------------------------------------------------------
 # Internals
 # ---------------------------------------------------------------------------

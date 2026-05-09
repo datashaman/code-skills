@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "workflow-advisor"
+version = "0.1.0"
+description = "CLI helpers for the workflow-advisor skill."
+requires-python = ">=3.10"
+dependencies = ["PyYAML>=6"]
+
+[project.scripts]
+workflow-advisor = "cli:main"
+
+[tool.setuptools]
+package-dir = {"" = "scripts"}
+py-modules = ["cli"]
+
+[tool.setuptools.packages.find]
+where = ["scripts"]
+include = ["helpers*"]

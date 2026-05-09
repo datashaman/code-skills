@@ -1,0 +1,6 @@
+interface:
+  display_name: "Workflow Advisor"
+  short_description: "Interview a team about their development process, generate a versioned workflow configuration, and advise on GitHub events, gates, labels, and process automation."
+  default_prompt: "$workflow-advisor"
+policy:
+  allow_implicit_invocation: true

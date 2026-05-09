@@ -1,0 +1,10 @@
+type: pr
+id: 42
+stage: review
+linked_artifacts:
+  specs:
+    - demo
+approvals:
+  received:
+    - reviewer
+current_labels: []

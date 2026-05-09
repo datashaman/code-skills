@@ -1,0 +1,60 @@
+schema_version: 1
+repo:
+  provider: github
+  identifier: example/workflow-advisor-fixture
+  default_branch: main
+  branch_model: github-flow
+profiles:
+  spec-driven: { enabled: true }
+  testability: { enabled: true }
+  observability: { enabled: false }
+lifecycle:
+  composition:
+    sequence:
+      - spec
+      - impl-plan
+      - implementation
+      - review
+      - merge-ready
+  gates:
+    spec:
+      - spec_drafted
+    review:
+      - tests_pass
+    merge-ready:
+      - min_approvals_met
+      - no_open_blockers
+  cascade:
+    spec_substantive_change:
+      open_prs: revert_to_arch_review
+    preserve_in_flight: true
+roles:
+  architect:
+    members:
+      - { type: github, handle: octocat }
+  tech_lead:
+    members:
+      - { type: github, handle: octocat }
+  reviewer:
+    members:
+      - { type: github, handle: reviewer }
+transport:
+  mode: on_demand_only
+provider_actions:
+  mode: queue
+artifacts:
+  spec:
+    enabled: true
+    lives_in: docs/specs/
+    template: references/templates/spec.md
+    front_matter_sync: true
+review_policy:
+  min_approvals: 1
+classification:
+  type_triggers: {}
+  area_triggers: {}
+ai_usage:
+  spec_amendment_classify: mechanical_only
+observability_reports:
+  reports:
+    actor_attribution: roles

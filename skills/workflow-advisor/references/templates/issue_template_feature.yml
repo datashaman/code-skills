@@ -1,0 +1,64 @@
+name: Feature request
+description: Propose a new feature, capability, or substantive change.
+title: "[feat] "
+labels: ["type:feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for substantive feature proposals. The skill
+        will route the issue to the architect role for arch-review and
+        will flag whether a spec is required.
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One paragraph — what should this feature do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation
+      description: Why does this matter? What problem does it solve?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: |
+        Sketch the shape of the change. The architect will likely ask
+        for a full spec before implementation; a sketch here makes that
+        conversation easier.
+
+  - type: dropdown
+    id: areas
+    attributes:
+      label: Affected areas
+      description: Helps the skill route to the right roles for review.
+      multiple: true
+      options:
+        - auth
+        - payments
+        - pii
+        - api
+        - ui
+        - infrastructure
+        - performance-sensitive
+        - user-facing
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What else did you consider?
+
+  - type: textarea
+    id: open_questions
+    attributes:
+      label: Open questions
+      description: Anything you'd like input on before scoping a spec.

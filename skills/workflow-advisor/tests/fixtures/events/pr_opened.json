@@ -1,0 +1,32 @@
+{
+  "action": "opened",
+  "X-GitHub-Delivery": "fixture-delivery-1",
+  "repository": {
+    "full_name": "example/workflow-advisor-fixture",
+    "default_branch": "main"
+  },
+  "sender": {
+    "login": "octocat"
+  },
+  "pull_request": {
+    "number": 42,
+    "title": "feat: demo workflow",
+    "body": "Spec: demo",
+    "draft": false,
+    "user": {
+      "login": "octocat"
+    },
+    "base": {
+      "ref": "main"
+    },
+    "head": {
+      "ref": "feat/demo"
+    },
+    "labels": []
+  },
+  "files": [
+    {
+      "filename": "docs/specs/demo.md"
+    }
+  ]
+}

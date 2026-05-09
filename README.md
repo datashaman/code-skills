@@ -104,17 +104,17 @@ Trello board health audit. Queries five dimensions of card data to identify thro
 /audit-trello board="My Board" since=2024-07-01
 ```
 
-### `/github-workflow-configurator`
+### `/workflow-advisor`
 
-> **⚠️ WIP — not ready for use.** This skill is under active development and is not yet stable. Don't install it on a setup you care about.
+Interview-driven process automation for software teams. Helps adopt and run spec-driven development and related practices through a progressive team interview, a versioned `.workflow/` configuration, GitHub workflow generation, event playbooks, lifecycle gates, process reports, and reconcile loops for pushes, pull requests, issues, and comments.
 
-Interview-driven GitHub workflow setup for agent-assisted delivery. Helps choose and configure team composition, solo-vs-peer product review, architecture review gates, comment-triggered automation, GitHub Actions events, branch/label policy, and automation authority. Produces repo-specific config/docs/templates such as `.github/sdlc-agent-workflow.yml`, Actions event routing, issue templates, and PR templates.
+**Arguments:** None — the skill detects whether the repo needs bootstrap, event handling, reconciliation, reporting, or workflow advice.
 
 **Usage:**
 ```
-/github-workflow-configurator configure this repo for solo PO workflow
-/github-workflow-configurator set up comment-triggered agent automation
-/github-workflow-configurator design a GitHub Actions approach for PO + Architect + remote agents
+/workflow-advisor set up team process for this repo
+/workflow-advisor configure SDD with testability and observability gates
+/workflow-advisor reconcile the current GitHub workflow state
 ```
 
 ### `/onepager`

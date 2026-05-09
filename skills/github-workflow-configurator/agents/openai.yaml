@@ -1,6 +1,0 @@
-interface:
-  display_name: "GitHub Workflow Configurator"
-  short_description: "Configure GitHub Actions, events, reviews, and agent workflow modes."
-  default_prompt: "Use $github-workflow-configurator to interview me and configure this repo's GitHub automation workflow."
-policy:
-  allow_implicit_invocation: true

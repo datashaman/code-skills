@@ -352,19 +352,12 @@ def set_draft(
     dry_run: bool = True,
     runner: Runner | None = None,
 ) -> dict:
-    """
-    Mark a PR draft or ready-for-review.
-
-    GitHub exposes this through GraphQL. The first implementation records the
-    intended transition; a later executor can resolve the PR node id and run the
-    mutation.
-    """
+    """Mark a PR draft or ready-for-review."""
     action = "pr.set_draft" if draft else "pr.mark_ready_for_review"
-    payload = {"repo": repo, "pr_number": pr_number, "draft": draft}
-    if dry_run:
-        return {"action": action, "dry_run": True, "commands": [], "payload": payload}
-    queue_action(action, payload, reason="GraphQL node-id resolution required")
-    return {"action": action, "queued": True, "commands": [], "payload": payload}
+    command = ["gh", "pr", "ready", str(pr_number), "--repo", repo]
+    if draft:
+        command.append("--undo")
+    return _run_or_preview(action, [command], dry_run, runner)
 
 
 def _run_or_preview(

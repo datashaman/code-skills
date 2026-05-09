@@ -57,6 +57,20 @@ def main() -> int:
     reviewers = provider_actions.assign_reviewers("example/repo", 42, ["@octocat"])
     assert "reviewers[]=octocat" in reviewers["commands"][0]
 
+    draft = provider_actions.set_draft("example/repo", 42, draft=True)
+    assert draft["commands"][0] == [
+        "gh",
+        "pr",
+        "ready",
+        "42",
+        "--repo",
+        "example/repo",
+        "--undo",
+    ]
+
+    ready = provider_actions.set_draft("example/repo", 42, draft=False)
+    assert ready["commands"][0] == ["gh", "pr", "ready", "42", "--repo", "example/repo"]
+
     with tempfile.TemporaryDirectory() as tmp:
         queue_path = Path(tmp) / "pending.jsonl"
         applied_path = Path(tmp) / "applied.jsonl"

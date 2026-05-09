@@ -197,6 +197,10 @@ def cmd_report(args: argparse.Namespace) -> int:
     archive and metrics events log. Read-only.
     """
     config = config_io.load_from_path(_config_path())
+    output_format = "json" if args.format == "json" else "markdown"
+    actor_attribution = args.render_as or config.get("observability_reports", {}).get(
+        "reports", {}
+    ).get("actor_attribution", "roles")
 
     report = reports_mod.compute(
         config=config,
@@ -204,8 +208,10 @@ def cmd_report(args: argparse.Namespace) -> int:
         since=args.since,
         until=args.until,
         compare_to=args.compare_to,
-        render_as=args.render_as or config["observability_reports"]["reports"]["actor_attribution"],
+        render_as=output_format,
     )
+    if args.format != "json":
+        report = reports_mod.redact_actors(report, attribution=actor_attribution)
 
     print(reports_mod.format_report(report, format=args.format))
     return 0

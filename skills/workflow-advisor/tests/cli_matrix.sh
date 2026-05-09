@@ -11,7 +11,9 @@ python3 "$CLI" --config "$CONFIG" status pr-42 >/dev/null
 python3 "$CLI" --config "$CONFIG" simulate replay smoke-run >/dev/null
 python3 "$CLI" --config "$CONFIG" simulate config-diff >/dev/null
 python3 "$CLI" --config "$CONFIG" report cycle-times >/dev/null
+python3 "$CLI" --config "$CONFIG" report cycle-times --format json | python3 -m json.tool >/dev/null
 python3 "$CLI" --config "$CONFIG" report gate-friction >/dev/null
+python3 "$CLI" --config "$CONFIG" report gate-friction --format json | python3 -m json.tool >/dev/null
 python3 "$CLI" --config "$CONFIG" report documentation >/dev/null
 python3 "$CLI" --config "$CONFIG" lifecycle validate >/dev/null
 python3 "$CLI" --config "$CONFIG" profiles disable documentation >/dev/null

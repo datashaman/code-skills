@@ -101,14 +101,23 @@ lifecycle:
   cascade:
     spec_substantive_change:
       impl_plan: revert_to_draft
+      test_plan: revert_to_draft
+      obs_plan: revert_to_draft
+      threat_model: revert_to_draft
       open_prs: revert_to_arch_review
       related_adrs: flag_for_review
     spec_editorial_change:
       impl_plan: no_change
+      test_plan: no_change
+      obs_plan: no_change
+      threat_model: no_change
       open_prs: notify_only
       related_adrs: no_change
     spec_supersession:
       impl_plan: archive
+      test_plan: archive
+      obs_plan: archive
+      threat_model: archive
       open_prs: link_to_new_spec_and_notify
       related_adrs: append_supersession_note
     preserve_in_flight: true   # default; label-and-notify before reverting

@@ -202,17 +202,25 @@ def find_dependents(artifact: dict, config: dict) -> list[dict]:
     Find items that cascade rules might affect.
 
     Returns a list of { "type", "id", "category" } where category is
-    one of: "impl_plan", "open_prs", "related_adrs", "audience_docs".
+    one of: "impl_plan", "test_plan", "obs_plan", "threat_model",
+    "open_prs", "related_adrs", "audience_docs".
     """
     deps: list[dict] = []
     art_type = artifact["type"]
     art_id = artifact["id"]
 
     if art_type == "spec":
-        # impl_plan
-        impl_plan_path = ARTIFACTS_DIR / "impl-plans" / f"{art_id}.yml"
-        if impl_plan_path.exists():
-            deps.append({"type": "impl_plan", "id": art_id, "category": "impl_plan"})
+        deps.extend(
+            _same_id_plan_dependents(
+                art_id,
+                {
+                    "impl-plans": ("impl_plan", "impl_plan"),
+                    "test-plans": ("test_plan", "test_plan"),
+                    "obs-plans": ("obs_plan", "obs_plan"),
+                    "threat-models": ("threat_model", "threat_model"),
+                },
+            )
+        )
 
         # open PRs that link to this spec
         for lifecycle_file in LIFECYCLE_DIR.glob("pr-*.yml"):
@@ -262,6 +270,16 @@ def find_dependents(artifact: dict, config: dict) -> list[dict]:
                         }
                     )
 
+    return deps
+
+
+def _same_id_plan_dependents(art_id: str, mappings: dict[str, tuple[str, str]]) -> list[dict]:
+    """Find plan sidecars that conventionally share a spec id."""
+    deps = []
+    for dirname, (target_type, category) in mappings.items():
+        path = ARTIFACTS_DIR / dirname / f"{art_id}.yml"
+        if path.exists():
+            deps.append({"type": target_type, "id": art_id, "category": category})
     return deps
 
 

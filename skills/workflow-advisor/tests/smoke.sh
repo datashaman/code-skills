@@ -18,6 +18,7 @@ python3 "$ROOT/scripts/cli.py" --config "$CONFIG" reconcile --dry-run --event-na
 python3 "$ROOT/scripts/cli.py" provider-actions list | grep -q "No pending provider actions"
 python3 "$ROOT/tests/provider_actions_smoke.py" | grep -q "provider actions smoke OK"
 python3 "$ROOT/tests/lifecycle_gates_smoke.py" | grep -q "lifecycle gates smoke OK"
+python3 "$ROOT/tests/cascade_dependents_smoke.py" | grep -q "cascade dependents smoke OK"
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT

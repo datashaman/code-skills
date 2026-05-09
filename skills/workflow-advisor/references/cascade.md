@@ -2,7 +2,8 @@
 
 Cascade rules describe what happens when a source artifact changes and other
 work depends on it. The current v1 focus is spec changes affecting implementation
-plans, active PRs, ADRs, and audience docs.
+plans, test plans, observability plans, threat models, active PRs, ADRs, and
+audience docs.
 
 Every cascade pass follows the reconcile loop:
 
@@ -16,8 +17,9 @@ Every cascade pass follows the reconcile loop:
 
 - Editorial spec changes do not reset dependent artifacts. Open PRs may get a
   notification.
-- Substantive spec changes revert implementation plans to draft, send open PRs
-  back to architecture review, and flag related ADRs.
+- Substantive spec changes revert implementation, test, observability, and
+  threat-model plans to draft, send open PRs back to architecture review, and
+  flag related ADRs.
 - Structural spec changes archive superseded plans, link open PRs to the new
   spec, and append supersession notes to related ADRs.
 

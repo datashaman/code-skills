@@ -19,7 +19,7 @@ This module is a thin orchestrator. The heavy lifting is in
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import json
 import logging
 from pathlib import Path
@@ -48,7 +48,7 @@ def run_poll_pass() -> dict:
     summary = {"events_processed": 0, "errors": []}
 
     for resource in ("pull_requests", "issues", "comments", "pushes"):
-        since = cursor.get(resource) or _now_iso()
+        since = _cursor_since(cursor.get(resource))
         try:
             items = _fetch_since(repo, resource, since)
             for item in items:
@@ -170,3 +170,16 @@ def _save_cursor(cursor: dict) -> None:
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _cursor_since(value: str | None) -> str:
+    """Return cursor timestamp with a small overlap window."""
+    if not value:
+        return _now_iso()
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return value
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return (parsed - timedelta(seconds=OVERLAP_SECONDS)).isoformat()

@@ -23,10 +23,13 @@ import sys
 from platformdirs import user_data_dir
 
 APP = "cscript"
-DATA = Path(user_data_dir(APP))
+DATA = Path(os.environ.get("CSCRIPT_DATA_DIR") or user_data_dir(APP))
 SCRIPTS = DATA / "scripts"
 ARCHIVE = SCRIPTS / ".archive"
+STATE = DATA / "state"
 INDEX = DATA / "index.json"
+
+EXT = {"bash": ".sh", "python": ".py"}
 
 
 def ensure_dirs() -> None:
@@ -46,14 +49,26 @@ def save_index(items: list[dict]) -> None:
     INDEX.write_text(json.dumps(items, indent=2) + "\n")
 
 
-def find(name: str) -> dict | None:
+def resolve(name: str) -> dict | None:
+    """Find a script by exact or unambiguous partial name.
+
+    Prints a helpful error to stderr on miss or ambiguity. Returns the
+    matching entry or None.
+    """
     items = load_index()
     for item in items:
         if item["name"] == name:
             return item
     partial = [i for i in items if name in i["name"]]
+    if not partial:
+        print(f"cscript: no script matching {name!r}", file=sys.stderr)
+        return None
     if len(partial) == 1:
         return partial[0]
+    print(f"cscript: {name!r} is ambiguous; candidates:", file=sys.stderr)
+    width = max(len(i["name"]) for i in partial)
+    for item in sorted(partial, key=lambda x: x["name"]):
+        print(f"  {item['name']:<{width}}  {item['description']}", file=sys.stderr)
     return None
 
 
@@ -94,24 +109,43 @@ def cmd_which(args: argparse.Namespace) -> int:
     return 0
 
 
+def confirm_run(item: dict) -> bool:
+    """Prompt the user before running a non-read-only script on a TTY.
+
+    Returns True if the user agreed (or no prompt was needed), False if
+    they declined.
+    """
+    if item.get("read_only"):
+        return True
+    if not sys.stdin.isatty() or not sys.stderr.isatty():
+        return True
+    prompt = f"Run {item['name']!r} ({item['description']})? [y/N] "
+    try:
+        answer = input(prompt).strip().lower()
+    except EOFError:
+        answer = ""
+    return answer in ("y", "yes")
+
+
 def cmd_run(args: argparse.Namespace) -> int:
-    item = find(args.name)
-    if not item:
-        print(f"cscript: no script matching {args.name!r}", file=sys.stderr)
+    item = resolve(args.name)
+    if item is None:
         return 2
     path = Path(item["path"])
     if not path.exists():
         print(f"cscript: script file missing: {path}", file=sys.stderr)
         return 2
+    if not args.yes and not confirm_run(item):
+        print("cscript: aborted", file=sys.stderr)
+        return 1
     if not os.access(path, os.X_OK):
         path.chmod(0o755)
     os.execv(str(path), [str(path), *args.args])
 
 
 def cmd_show(args: argparse.Namespace) -> int:
-    item = find(args.name)
-    if not item:
-        print(f"cscript: no script matching {args.name!r}", file=sys.stderr)
+    item = resolve(args.name)
+    if item is None:
         return 2
     print(f"# name:        {item['name']}")
     print(f"# description: {item['description']}")
@@ -121,32 +155,43 @@ def cmd_show(args: argparse.Namespace) -> int:
     if item.get("args_help"):
         print(f"# usage:       {item['args_help']}")
     print()
-    print(Path(item["path"]).read_text(), end="")
+    print(Path(item["path"]).read_text(encoding="utf-8"), end="")
     return 0
 
 
 def cmd_edit(args: argparse.Namespace) -> int:
-    item = find(args.name)
-    if not item:
-        print(f"cscript: no script matching {args.name!r}", file=sys.stderr)
+    item = resolve(args.name)
+    if item is None:
         return 2
     editor = os.environ.get("EDITOR") or os.environ.get("VISUAL") or "vi"
     return subprocess.call([editor, item["path"]])
 
 
 def cmd_rm(args: argparse.Namespace) -> int:
-    item = find(args.name)
-    if not item:
-        print(f"cscript: no script matching {args.name!r}", file=sys.stderr)
+    item = resolve(args.name)
+    if item is None:
         return 2
     src = Path(item["path"])
     if src.exists():
         ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         dest = ARCHIVE / f"{item['name']}.{ts}{src.suffix}"
         shutil.move(str(src), str(dest))
+    state_dir = STATE / item["name"]
+    if state_dir.exists():
+        shutil.rmtree(state_dir)
     items = [i for i in load_index() if i["name"] != item["name"]]
     save_index(items)
     print(f"Removed {item['name']} (archived under {ARCHIVE})")
+    return 0
+
+
+def cmd_state_dir(args: argparse.Namespace) -> int:
+    item = resolve(args.name)
+    if item is None:
+        return 2
+    state_dir = STATE / item["name"]
+    state_dir.mkdir(parents=True, exist_ok=True)
+    print(state_dir)
     return 0
 
 
@@ -156,7 +201,8 @@ def cmd_register(args: argparse.Namespace) -> int:
     if not src.is_file():
         print(f"cscript: --source not a file: {src}", file=sys.stderr)
         return 2
-    dest = SCRIPTS / args.filename
+    filename = args.filename or f"{args.name}{EXT[args.language]}"
+    dest = SCRIPTS / filename
     if dest.exists() and dest.resolve() != src:
         ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         shutil.move(str(dest), str(ARCHIVE / f"{args.name}.{ts}{dest.suffix}"))
@@ -169,7 +215,7 @@ def cmd_register(args: argparse.Namespace) -> int:
             "name": args.name,
             "description": args.description,
             "language": args.language,
-            "filename": args.filename,
+            "filename": filename,
             "path": str(dest),
             "created": datetime.now(timezone.utc).isoformat(),
             "args_help": args.args_help or "",
@@ -187,7 +233,8 @@ def cmd_where(_args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="cscript", description=__doc__.splitlines()[0])
+    summary = (__doc__ or "cscript").splitlines()[0]
+    p = argparse.ArgumentParser(prog="cscript", description=summary)
     sub = p.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("list", help="list registered scripts")
@@ -196,7 +243,15 @@ def build_parser() -> argparse.ArgumentParser:
     pw = sub.add_parser("which", help="fuzzy match against names/descriptions")
     pw.add_argument("query")
 
-    pr = sub.add_parser("run", help="execute a registered script")
+    pr = sub.add_parser(
+        "run",
+        help="execute a registered script",
+        description="Execute a registered script. Place --yes BEFORE the name; "
+        "anything after the name is forwarded to the script.",
+    )
+    pr.add_argument(
+        "--yes", "-y", action="store_true", help="skip the confirm prompt for non-read-only scripts"
+    )
     pr.add_argument("name")
     pr.add_argument("args", nargs=argparse.REMAINDER)
 
@@ -209,12 +264,19 @@ def build_parser() -> argparse.ArgumentParser:
     prm = sub.add_parser("rm", help="archive and unregister a script")
     prm.add_argument("name")
 
+    psd = sub.add_parser(
+        "state-dir", help="print (creating if missing) the per-script state directory"
+    )
+    psd.add_argument("name")
+
     preg = sub.add_parser("register", help="(used by the compile-task skill)")
     preg.add_argument("--source", required=True, help="path to the freshly-written script file")
     preg.add_argument("--name", required=True)
     preg.add_argument("--description", required=True)
-    preg.add_argument("--language", required=True, choices=("bash", "python"))
-    preg.add_argument("--filename", required=True)
+    preg.add_argument("--language", required=True, choices=tuple(EXT))
+    preg.add_argument(
+        "--filename", default="", help="override the auto-derived <name>.{sh,py} filename"
+    )
     preg.add_argument("--args-help", default="")
     preg.add_argument("--read-only", action="store_true")
 
@@ -231,6 +293,7 @@ def main(argv: list[str] | None = None) -> int:
         "show": cmd_show,
         "edit": cmd_edit,
         "rm": cmd_rm,
+        "state-dir": cmd_state_dir,
         "register": cmd_register,
         "where": cmd_where,
     }

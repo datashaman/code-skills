@@ -18,15 +18,16 @@ cscript run rename-by-exif-date ./photos
 
 ## The `cscript` dispatcher
 
-A single Python script installed on first use into a user-writable directory on `PATH` (the skill detects the right location per OS). It manages everything in an OS-correct appdata directory (`~/Library/Application Support/cscript/` on macOS, `~/.local/share/cscript/` on Linux, `%LOCALAPPDATA%\cscript\` on Windows).
+A single Python script installed on first use into a user-writable directory on `PATH`. It stores everything in an OS-correct appdata directory (`~/Library/Application Support/cscript/` on macOS, `~/.local/share/cscript/` on Linux). macOS and Linux only.
 
 ```
 cscript list                       # show all registered scripts
 cscript which "<description>"      # fuzzy-match catalogue
-cscript run <name> [args...]       # execute
+cscript run [--yes] <name> [args]  # execute (prompts on TTY unless --yes)
 cscript show <name>                # print source + metadata
 cscript edit <name>                # open in $EDITOR
 cscript rm <name>                  # archive and unregister
+cscript state-dir <name>           # print per-script state dir
 cscript where                      # print the data directory
 ```
 

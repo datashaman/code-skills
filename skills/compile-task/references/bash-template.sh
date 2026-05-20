@@ -23,7 +23,7 @@ Flags:
 EOF
 }
 
-# Parse args explicitly. Never use `getopts` for long flags — write the loop.
+# Parse args explicitly. `getopts` doesn't do long flags; write the loop.
 flag=0
 required=""
 while (($#)); do

@@ -23,7 +23,7 @@ The point of this skill is to **stop paying an LLM to redo deterministic work**.
 1. **Check the catalogue first.** Before designing anything, run `cscript which "<short description>"` and `cscript list`. If a registered script matches the intent, propose running it. Never silently regenerate something that already exists.
 2. **Confirm before running.** Show the matched script's name, description, and the exact command you're about to run. Wait for user confirmation. Apply this to both freshly generated and previously registered scripts. Auto-run is never on.
 3. **Self-contained.** Generated scripts must run on their own — no project-local imports, no relative paths, no assumed cwd. Bash uses only POSIX tools (or tools you've checked are installed). Python uses PEP 723 inline deps so `uv run` handles everything.
-4. **One file.** No sibling helpers, no companion config files. State, if any, goes in the same appdata dir under `state/<script-name>/`.
+4. **One file.** No sibling helpers, no companion config files. If a script needs persistent state, ask the dispatcher for its slot: `cscript state-dir <name>` prints (and creates on first call) a per-script directory inside the appdata dir.
 5. **`--help` is mandatory.** Every script supports `-h`/`--help` and exits non-zero on missing required args with a usage message.
 6. **Idempotent registration.** Re-registering the same `--name` archives the old version into `scripts/.archive/<name>.<timestamp>` and replaces it. Never silently overwrite.
 7. **Don't generate destructive scripts without `--dry-run`.** If a script deletes, force-pushes, drops a table, sends an email, or modifies shared state, it must support `--dry-run` and default-print-what-it-would-do for unfamiliar inputs. Pass `--read-only` to `cscript register` only for scripts that truly cannot modify state (the dispatcher tags those with `[ro]` in `list`); leave it off for everything else.
@@ -40,14 +40,15 @@ In order, before anything else:
 
 3. **If `cscript` is missing, install it.** The source lives at `scripts/cscript` relative to this `SKILL.md`. Resolve the path from wherever this file was loaded; if you cannot find it, ask the user for the skill directory rather than guessing.
 
-   Pick a destination directory that is **user-writable and already on `PATH`**. Detect this per-OS rather than hardcoding a path:
+   Pick a destination directory that is **user-writable and already on `PATH`**:
 
-   - Inspect `PATH` entries that already exist and live under the user's home directory.
-   - Prefer one the user already maintains. If none is on `PATH`, ask the user where to put the binary rather than picking one for them.
-   - Copy `scripts/cscript` to `<chosen-dir>/cscript` (or `cscript.py` on Windows, if the shell does not resolve extensionless scripts).
-   - On POSIX systems, make it executable.
+   - Inspect existing `PATH` entries under the user's home directory and prefer one they already maintain.
+   - If none is on `PATH`, ask the user where to put the binary rather than picking one for them.
+   - Copy `scripts/cscript` to `<chosen-dir>/cscript` and make it executable.
 
-4. **Verify the install worked.** After copying, run `cscript --help` in a fresh shell invocation. If it does not resolve, the chosen directory is not on `PATH` in interactive shells — tell the user how to add it for their shell/OS and stop. Do not proceed until they confirm `cscript --help` works.
+   Currently macOS and Linux only. Windows is out of scope (the dispatcher uses `os.execv` and a `uv run` shebang).
+
+4. **Verify the install worked.** After copying, run `cscript --help` in a fresh shell invocation. If it does not resolve, the chosen directory is not on `PATH` in interactive shells — tell the user how to add it for their shell and stop. Do not proceed until they confirm `cscript --help` works.
 
 The dispatcher itself is a uv single-file script — it bootstraps its own Python deps the first time it runs.
 
@@ -98,22 +99,21 @@ cscript register \
   --name <name> \
   --description "<one-line, present tense, no trailing period>" \
   --language <bash|python> \
-  --filename <name>{.sh|.py} \
   --args-help "<one-line usage>" \
   [--read-only]
 ```
 
-The dispatcher moves the file from `--source` into the appdata `scripts/` directory, chmods it to 0755, archives any prior version with the same `--filename`, and prints the final path. Use `.sh` for bash and `.py` for uv Python; the dispatcher hides the extension from users.
+The dispatcher derives the filename automatically (`<name>.sh` for bash, `<name>.py` for python), moves the file from `--source` into the appdata `scripts/` directory, chmods it to 0755, archives any prior version, and prints the final path.
 
 ### 6. Run
 
-Always run the freshly registered script through the dispatcher, never by direct path:
+Always run the freshly registered script through the dispatcher, never by direct path. Pass `--yes` since you have already confirmed the run with the user:
 
 ```sh
-cscript run <name> [args...]
+cscript run --yes <name> [args...]
 ```
 
-This proves the dispatcher works and gives the user the muscle-memory invocation they'll use next time.
+Direct (human) invocations omit `--yes`; the dispatcher will then prompt before running non-read-only scripts on a TTY. This proves the dispatcher works and gives the user the muscle-memory invocation they'll use next time.
 
 ### 7. Report
 
@@ -127,11 +127,10 @@ Do not paste the full source. They can `cscript show <name>` if they want it.
 
 ## Dispatcher reference
 
-The dispatcher is installed wherever the user keeps personal binaries on `PATH` (varies per OS — see bootstrap). It stores everything under the OS appdata directory (resolved via `platformdirs.user_data_dir("cscript")`):
+The dispatcher is installed wherever the user keeps personal binaries on `PATH` (see bootstrap). It stores everything under the OS appdata directory (resolved via `platformdirs.user_data_dir("cscript")`, or `$CSCRIPT_DATA_DIR` if set):
 
 - macOS: `~/Library/Application Support/cscript/`
 - Linux: `~/.local/share/cscript/`
-- Windows: `%LOCALAPPDATA%\cscript\`
 
 Subcommands:
 
@@ -139,10 +138,11 @@ Subcommands:
 | --- | --- |
 | `cscript list` | List all registered scripts with descriptions. |
 | `cscript which <query>` | Fuzzy match across names and descriptions. Used by this skill before generating. |
-| `cscript run <name> [args...]` | Execute the registered script. Args are passed through. |
+| `cscript run [--yes] <name> [args...]` | Execute the registered script. Prompts before non-read-only runs on a TTY unless `--yes`. Args after the name are passed through. |
 | `cscript show <name>` | Print the script's source plus its index metadata. |
 | `cscript edit <name>` | Open the script in `$EDITOR`. |
-| `cscript rm <name>` | Archive the file to `scripts/.archive/` and remove from the index. |
+| `cscript rm <name>` | Archive the file to `scripts/.archive/` and drop its index entry and state directory. |
+| `cscript state-dir <name>` | Print (creating if missing) the per-script state directory under the appdata dir. |
 | `cscript where` | Print the data directory path. |
 | `cscript register …` | Used by this skill at compile time; not normally hand-invoked. |
 

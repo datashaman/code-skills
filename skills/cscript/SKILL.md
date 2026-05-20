@@ -1,20 +1,20 @@
 ---
-name: compile-task
+name: cscript
 description: |
   Compile a one-off task description into a reusable, self-contained
   executable script so the LLM doesn't have to do the same work again.
   Picks bash for trivial file/shell ops, single-file uv Python (PEP 723)
-  for anything needing libraries. Registers scripts in an OS-correct
-  appdata directory and exposes them through a `cscript` dispatcher
-  installed on PATH. Future invocations match the description against
-  the index and re-run the existing script instead of regenerating.
-  Use when the user says "compile this", "make a script for X",
-  "stash this as a script", "save this so I don't have to ask again",
-  or describes a task that sounds like it will recur.
+  for anything needing libraries, or PowerShell for Windows-native work.
+  Registers scripts in an OS-correct appdata directory and exposes them
+  through a `cscript` dispatcher installed on PATH. Future invocations
+  match the description against the index and re-run the existing script
+  instead of regenerating. Use when the user says "compile this", "make
+  a script for X", "stash this as a script", "save this so I don't have
+  to ask again", or describes a task that sounds like it will recur.
 user-invocable: true
 ---
 
-# compile-task — turn prompts into reusable executables
+# cscript — turn prompts into reusable executables
 
 The point of this skill is to **stop paying an LLM to redo deterministic work**. Each time the user describes a task that could be a script, compile it once, register it in the catalogue, and run the registered script from then on. Generation is the exception; execution is the rule.
 
@@ -38,7 +38,9 @@ In order, before anything else:
 
 2. **Check whether the dispatcher is installed and on PATH.** Run `command -v cscript >/dev/null 2>&1`.
 
-3. **If `cscript` is missing, install it.** The source lives at `scripts/cscript` relative to this `SKILL.md`. Resolve the path from wherever this file was loaded; if you cannot find it, ask the user for the skill directory rather than guessing.
+   If installed, also check it is not stale: compare `cscript version` against the source's version. The source's version is the `VERSION = "..."` line near the top of `scripts/cscript`. If they differ (or the installed binary predates `version` and errors), treat it as missing and re-install it the same way as a fresh install — copying over the existing file. Tell the user you are upgrading their dispatcher.
+
+3. **If `cscript` is missing (or stale), install it.** The source lives at `scripts/cscript` relative to this `SKILL.md`. Resolve the path from wherever this file was loaded; if you cannot find it, ask the user for the skill directory rather than guessing.
 
    Pick a destination directory that is **user-writable and already on `PATH`**:
 
@@ -62,6 +64,26 @@ In order, before anything else:
      If the check reports anything other than `OK`, tell the user how to fix it (add/reorder the entry in User PATH) and stop until they confirm.
 
 4. **Verify the install worked.** After copying, run `cscript --help` in a fresh shell invocation. If it does not resolve, the chosen directory is not on `PATH` in interactive shells — tell the user how to add it for their shell and stop. Do not proceed until they confirm `cscript --help` works.
+
+5. **Offer to install the catalogue hint hook (Claude Code only).** This is the loop-closer: it makes future prompts trigger a catalogue lookup automatically, even when the user doesn't invoke `/cscript`. Without it, the second-time-doing-X savings only kick in when the user remembers to use the slash command.
+
+   - Source: `scripts/cscript-hook` next to this `SKILL.md`. Stdlib Python; no install dependencies beyond `cscript` itself.
+   - Install path: copy to `~/.claude/hooks/cscript-hook` (create the dir if missing) and `chmod +x` on POSIX.
+   - Wire-up: add the hook to `~/.claude/settings.json` under `hooks.UserPromptSubmit`. Merge with any existing entries — do not overwrite. A minimal additive snippet:
+
+     ```json
+     {
+       "hooks": {
+         "UserPromptSubmit": [
+           { "hooks": [ { "type": "command", "command": "~/.claude/hooks/cscript-hook" } ] }
+         ]
+       }
+     }
+     ```
+
+   - Verify: run `echo '{"hook_event_name":"UserPromptSubmit","prompt":"<a prompt that should match an existing script>"}' | ~/.claude/hooks/cscript-hook` and confirm it emits a `<cscript-catalogue-hint>` block.
+
+   Ask the user before installing the hook. It runs on every prompt; some users prefer to wire that up themselves or skip it entirely. Default to yes if they don't have a strong preference — the loop is much weaker without it.
 
 The dispatcher itself is a uv single-file script — it bootstraps its own Python deps the first time it runs.
 

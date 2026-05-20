@@ -1,4 +1,4 @@
-# compile-task
+# cscript
 
 Compile one-off LLM tasks into reusable, self-contained executables so you stop paying tokens to redo deterministic work.
 
@@ -31,6 +31,15 @@ cscript state-dir <name>           # print per-script state dir
 cscript where                      # print the data directory
 ```
 
+## The catalogue hint hook
+
+Without help, the AI only consults the catalogue when you invoke `/cscript` explicitly. Casual prompts ("sort my downloads") skip the catalogue and pay LLM tokens to regenerate equivalent work.
+
+The skill ships a `UserPromptSubmit` hook (`scripts/cscript-hook`) for Claude Code that closes that loop: on every prompt, it runs `cscript which "<your prompt>"` and, if anything matches, injects a `<cscript-catalogue-hint>` block into the agent's context with the candidates. The agent considers reusing one instead of doing it from scratch.
+
+- Pure stdlib Python (~60ms per prompt). No-op when `cscript` isn't installed, when the prompt is conversational, or when nothing matches.
+- Opt-in: the skill asks before wiring it into `~/.claude/settings.json`.
+
 ## Design choices
 
 - **Self-contained scripts.** No project-local imports, no relative paths. A script written for one repo can run from anywhere.
@@ -46,9 +55,9 @@ It won't compile one-off explorations, judgement-laden tasks (refactoring, PR de
 ## Usage
 
 ```
-/compile-task rename JPGs in this directory by the EXIF date they were shot
-/compile-task pull all comments from GitHub PR https://github.com/foo/bar/pull/42 as markdown
-/compile-task strip EXIF from every image under a folder
+/cscript rename JPGs in this directory by the EXIF date they were shot
+/cscript pull all comments from GitHub PR https://github.com/foo/bar/pull/42 as markdown
+/cscript strip EXIF from every image under a folder
 ```
 
 Or just describe a task and let the skill decide whether to compile it.

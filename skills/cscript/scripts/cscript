@@ -3,7 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = ["platformdirs>=4.2"]
 # ///
-"""cscript — dispatcher for scripts created by the compile-task skill.
+"""cscript — dispatcher for scripts created by the /cscript skill.
 
 Stores generated scripts in an OS-correct appdata directory and exposes
 them through a small set of subcommands. See `cscript --help` for usage.
@@ -17,10 +17,13 @@ import json
 import os
 from pathlib import Path
 import shutil
+import string
 import subprocess
 import sys
 
 from platformdirs import user_data_dir
+
+VERSION = "0.2.0"
 
 APP = "cscript"
 DATA = Path(os.environ.get("CSCRIPT_DATA_DIR") or user_data_dir(APP))
@@ -75,7 +78,7 @@ def resolve(name: str) -> dict | None:
 def cmd_list(_args: argparse.Namespace) -> int:
     items = load_index()
     if not items:
-        print("No scripts registered yet. Use the /compile-task skill to create one.")
+        print("No scripts registered yet. Use the /cscript skill to create one.")
         return 0
     width = max(len(i["name"]) for i in items)
     for item in sorted(items, key=lambda x: x["name"]):
@@ -84,10 +87,34 @@ def cmd_list(_args: argparse.Namespace) -> int:
     return 0
 
 
+_STOPWORDS = frozenset(
+    """
+    this that what with from have your into onto over under about above below
+    when where which while would should could does done been being just like
+    such than then them they those well very also even more most some many
+    much both either neither
+    """.split()
+)
+_MIN_QUERY_TOKEN_LEN = 4
+_PUNCT_TRANS = str.maketrans({c: " " for c in string.punctuation})
+
+
+def _query_tokens(query: str) -> list[str]:
+    """Split the query into matchable tokens.
+
+    Drops tokens shorter than `_MIN_QUERY_TOKEN_LEN` and common stopwords so
+    short noise words ("is", "the", "what") don't substring-match into longer
+    haystack words ("isolate", "there", "whatever").
+    """
+    cleaned = query.lower().translate(_PUNCT_TRANS)
+    return [t for t in cleaned.split() if len(t) >= _MIN_QUERY_TOKEN_LEN and t not in _STOPWORDS]
+
+
 def cmd_which(args: argparse.Namespace) -> int:
     items = load_index()
-    query = args.query.lower()
-    tokens = [t for t in query.split() if t]
+    tokens = _query_tokens(args.query)
+    if not tokens:
+        return 1
     scored: list[tuple[int, dict]] = []
     for item in items:
         score = 0
@@ -260,6 +287,11 @@ def cmd_where(_args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_version(_args: argparse.Namespace) -> int:
+    print(VERSION)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     summary = (__doc__ or "cscript").splitlines()[0]
     p = argparse.ArgumentParser(prog="cscript", description=summary)
@@ -267,6 +299,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("list", help="list registered scripts")
     sub.add_parser("where", help="print the data directory")
+    sub.add_parser("version", help="print the dispatcher version")
 
     pw = sub.add_parser("which", help="fuzzy match against names/descriptions")
     pw.add_argument("query")
@@ -297,7 +330,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     psd.add_argument("name")
 
-    preg = sub.add_parser("register", help="(used by the compile-task skill)")
+    preg = sub.add_parser("register", help="(used by the /cscript skill)")
     preg.add_argument("--source", required=True, help="path to the freshly-written script file")
     preg.add_argument("--name", required=True)
     preg.add_argument("--description", required=True)
@@ -324,6 +357,7 @@ def main(argv: list[str] | None = None) -> int:
         "state-dir": cmd_state_dir,
         "register": cmd_register,
         "where": cmd_where,
+        "version": cmd_version,
     }
     return handlers[args.cmd](args)
 

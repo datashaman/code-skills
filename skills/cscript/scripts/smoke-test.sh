@@ -111,5 +111,35 @@ out=$("$CS" list)
 [[ "$out" == *"hello-again"* ]] || fail "list should still contain hello-again"
 pass "rm archives script and removes state dir"
 
+# 9. version subcommand
+out=$("$CS" version)
+[[ -n "$out" ]] || fail "version should print something"
+pass "version prints"
+
+# 10. mine: which calls are logged and mined
+# Generate three misses (same effective query) and one hit, then mine.
+"$CS" which "convert pdf to html for archiving" >/dev/null 2>&1 || true
+"$CS" which "convert pdf to html for archiving" >/dev/null 2>&1 || true
+"$CS" which "convert pdf to html for archiving" >/dev/null 2>&1 || true
+"$CS" which "hello-again" >/dev/null 2>&1 || true
+
+[[ -f "$CSCRIPT_DATA_DIR/which.log" ]] || fail "which.log should exist after which calls"
+log_lines=$(wc -l < "$CSCRIPT_DATA_DIR/which.log" | tr -d ' ')
+[[ "$log_lines" -ge 4 ]] || fail "which.log should have at least 4 entries, got $log_lines"
+pass "which appends to invocation log"
+
+out=$("$CS" mine)
+[[ "$out" == *"[3x]"* ]] || fail "mine should show 3x repeat for pdf-to-html query: '$out'"
+[[ "$out" == *"convert pdf to html"* ]] || fail "mine should surface the repeated query"
+[[ "$out" != *"hello-again"* ]] || fail "mine should exclude hits"
+pass "mine ranks repeated misses"
+
+# 11. mine: empty case message
+empty_dir="$(mktemp -d)"
+out=$(CSCRIPT_DATA_DIR="$empty_dir" "$CS" mine 2>&1 || true)
+[[ "$out" == *"No \`cscript which\` history yet"* ]] || fail "mine empty message missing: '$out'"
+rm -rf "$empty_dir"
+pass "mine handles empty log"
+
 echo
 echo "All checks passed."

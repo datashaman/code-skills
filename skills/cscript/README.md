@@ -29,16 +29,22 @@ cscript edit <name>                # open in $EDITOR
 cscript rm <name>                  # archive and unregister
 cscript state-dir <name>           # print per-script state dir
 cscript where                      # print the data directory
+cscript version                    # print the dispatcher version
+cscript mine                       # surface repeated `which` misses worth compiling
 ```
 
-## The catalogue hint hook
+## Surfacing candidates from your history
 
-Without help, the AI only consults the catalogue when you invoke `/cscript` explicitly. Casual prompts ("sort my downloads") skip the catalogue and pay LLM tokens to regenerate equivalent work.
+Per-prompt hooks are expensive (latency on every turn) and can only catch already-registered scripts — they can never propose new ones. Instead, `cscript` keeps a small local log of every `which` query and lets you mine it on demand:
 
-The skill ships a `UserPromptSubmit` hook (`scripts/cscript-hook`) for Claude Code that closes that loop: on every prompt, it runs `cscript which "<your prompt>"` and, if anything matches, injects a `<cscript-catalogue-hint>` block into the agent's context with the candidates. The agent considers reusing one instead of doing it from scratch.
+```
+cscript mine            # tasks you've asked for 2+ times that the catalogue never matched
+cscript mine --min 1    # every miss
+```
 
-- Pure stdlib Python (~60ms per prompt). No-op when `cscript` isn't installed, when the prompt is conversational, or when nothing matches.
-- Opt-in: the skill asks before wiring it into `~/.claude/settings.json`.
+The signal is direct: you (or an agent on your behalf) ran `cscript which "<task>"`, the catalogue returned nothing, and that happened more than once. Those are exactly the tasks worth compiling next.
+
+A smarter miner that reads Claude Code session transcripts and shell history is planned but deliberately deferred until the invocation log has enough real data to validate the algorithm.
 
 ## Design choices
 

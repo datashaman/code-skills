@@ -65,26 +65,6 @@ In order, before anything else:
 
 4. **Verify the install worked.** After copying, run `cscript --help` in a fresh shell invocation. If it does not resolve, the chosen directory is not on `PATH` in interactive shells — tell the user how to add it for their shell and stop. Do not proceed until they confirm `cscript --help` works.
 
-5. **Offer to install the catalogue hint hook (Claude Code only).** This is the loop-closer: it makes future prompts trigger a catalogue lookup automatically, even when the user doesn't invoke `/cscript`. Without it, the second-time-doing-X savings only kick in when the user remembers to use the slash command.
-
-   - Source: `scripts/cscript-hook` next to this `SKILL.md`. Stdlib Python; no install dependencies beyond `cscript` itself.
-   - Install path: copy to `~/.claude/hooks/cscript-hook` (create the dir if missing) and `chmod +x` on POSIX.
-   - Wire-up: add the hook to `~/.claude/settings.json` under `hooks.UserPromptSubmit`. Merge with any existing entries — do not overwrite. A minimal additive snippet:
-
-     ```json
-     {
-       "hooks": {
-         "UserPromptSubmit": [
-           { "hooks": [ { "type": "command", "command": "~/.claude/hooks/cscript-hook" } ] }
-         ]
-       }
-     }
-     ```
-
-   - Verify: run `echo '{"hook_event_name":"UserPromptSubmit","prompt":"<a prompt that should match an existing script>"}' | ~/.claude/hooks/cscript-hook` and confirm it emits a `<cscript-catalogue-hint>` block.
-
-   Ask the user before installing the hook. It runs on every prompt; some users prefer to wire that up themselves or skip it entirely. Default to yes if they don't have a strong preference — the loop is much weaker without it.
-
 The dispatcher itself is a uv single-file script — it bootstraps its own Python deps the first time it runs.
 
 ### 2. Match against the catalogue
@@ -182,7 +162,22 @@ Subcommands:
 | `cscript rm <name>` | Archive the file to `scripts/.archive/` and drop its index entry and state directory. |
 | `cscript state-dir <name>` | Print (creating if missing) the per-script state directory under the appdata dir. |
 | `cscript where` | Print the data directory path. |
+| `cscript version` | Print the dispatcher version. |
+| `cscript mine` | Rank repeated catalogue misses from the `which` log to surface things worth compiling. |
 | `cscript register …` | Used by this skill at compile time; not normally hand-invoked. |
+
+## Surfacing candidates from history
+
+`cscript which` appends every query to a local invocation log (`which.log` under the data dir). `cscript mine` reads it back and ranks queries that have been asked 2+ times but never matched anything in the catalogue — direct "I tried to reuse but couldn't" signal.
+
+Run it on-demand:
+
+```sh
+cscript mine            # repeated misses, default threshold 2
+cscript mine --min 1    # every miss
+```
+
+When you (the agent) see repeated patterns in your conversation that the user hasn't asked to compile yet, suggest `cscript mine` so they can review what's worth stashing.
 
 ## Regeneration
 

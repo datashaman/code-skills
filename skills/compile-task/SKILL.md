@@ -44,9 +44,22 @@ In order, before anything else:
 
    - Inspect existing `PATH` entries under the user's home directory and prefer one they already maintain.
    - If none is on `PATH`, ask the user where to put the binary rather than picking one for them.
-   - Copy `scripts/cscript` to `<chosen-dir>/cscript` and make it executable.
 
-   Currently macOS and Linux only. Windows is out of scope (the dispatcher uses `os.execv` and a `uv run` shebang).
+   Then install per OS:
+
+   - **macOS / Linux:** copy `scripts/cscript` to `<chosen-dir>/cscript` and make it executable.
+   - **Windows:** copy **both** `scripts/cscript` and `scripts/cscript.cmd` into the chosen directory. Windows resolves `cscript.cmd` via `PATHEXT`; the wrapper hands the extensionless source to `uv run --script`. Note: Windows ships `cscript.exe` (Windows Script Host) in `System32`; for our `cscript.cmd` to win, the chosen directory must appear in `PATH` before `C:\Windows\System32`. Verify by running this in PowerShell (substitute the chosen directory):
+
+     ```powershell
+     $paths = $env:Path -split ';'
+     $user = $paths.IndexOf('<chosen-dir>')
+     $sys  = $paths.IndexOf("$env:SystemRoot\System32")
+     if ($user -lt 0)                  { 'chosen dir not on PATH' }
+     elseif ($sys -ge 0 -and $user -gt $sys) { 'PATH ordering would let cscript.exe shadow cscript.cmd' }
+     else                              { 'OK' }
+     ```
+
+     If the check reports anything other than `OK`, tell the user how to fix it (add/reorder the entry in User PATH) and stop until they confirm.
 
 4. **Verify the install worked.** After copying, run `cscript --help` in a fresh shell invocation. If it does not resolve, the chosen directory is not on `PATH` in interactive shells — tell the user how to add it for their shell and stop. Do not proceed until they confirm `cscript --help` works.
 
@@ -72,8 +85,9 @@ If ambiguous (multiple plausible candidates) or no hits: show what you found and
 
 Pick the language using this decision rule, in order:
 
-1. **Bash** — if the task is purely file system, git, text munging with standard Unix tools (`jq`, `awk`, `sed`, `grep`, `find`, `rsync`), or a thin wrapper around an existing CLI the user has. No HTTP, no parsing structured formats beyond what `jq`/`yq` handle.
-2. **uv Python** — anything else. HTTP, HTML/XML parsing, image processing, anything pulling a library, anything where bash quoting would make you cry.
+1. **PowerShell** — if the task is Windows-native (registry, services, COM, Windows-specific filesystem APIs) **or** if the user is on Windows without Git Bash/WSL and the task is shell-y enough that bash would be the POSIX choice. `pwsh` (PowerShell Core) runs on macOS and Linux too, so this is also fine for cross-platform shell tasks if the user already uses PowerShell.
+2. **Bash** — if the task is purely file system, git, text munging with standard Unix tools (`jq`, `awk`, `sed`, `grep`, `find`, `rsync`), or a thin wrapper around an existing CLI the user has. No HTTP, no parsing structured formats beyond what `jq`/`yq` handle. On Windows, bash scripts need Git Bash or WSL.
+3. **uv Python** — anything else. HTTP, HTML/XML parsing, image processing, anything pulling a library, anything where bash quoting would make you cry. The cross-platform default when in doubt.
 
 Pick a name: short verb-object, kebab-case, no language suffix. `resize-pngs`, not `resize_pngs.sh`. `rename-by-exif-date`, not `photo_renamer.py`. The dispatcher hides the extension.
 
@@ -81,8 +95,9 @@ Read the matching template from `references/` before writing:
 
 - `references/bash-template.sh`
 - `references/uv-python-template.py`
+- `references/powershell-template.ps1`
 
-Both templates have the structural skeleton (shebang, header comment with NAME/DESC/USAGE, `--help`, arg parsing, error handling). Fill in the implementation only.
+All three templates have the structural skeleton (shebang, header comment with NAME/DESC/USAGE, `--help`/`-Help`, arg parsing, error handling). Fill in the implementation only.
 
 ### 4. Write and smoke-test
 
@@ -98,12 +113,12 @@ cscript register \
   --source <temp-path> \
   --name <name> \
   --description "<one-line, present tense, no trailing period>" \
-  --language <bash|python> \
+  --language <bash|python|powershell> \
   --args-help "<one-line usage>" \
   [--read-only]
 ```
 
-The dispatcher derives the filename automatically (`<name>.sh` for bash, `<name>.py` for python), moves the file from `--source` into the appdata `scripts/` directory, chmods it to 0755, archives any prior version, and prints the final path.
+The dispatcher derives the filename automatically (`<name>.sh` for bash, `<name>.py` for python, `<name>.ps1` for powershell), moves the file from `--source` into the appdata `scripts/` directory, makes it executable on POSIX, archives any prior version, and prints the final path.
 
 ### 6. Run
 
@@ -131,6 +146,7 @@ The dispatcher is installed wherever the user keeps personal binaries on `PATH` 
 
 - macOS: `~/Library/Application Support/cscript/`
 - Linux: `~/.local/share/cscript/`
+- Windows: `%LOCALAPPDATA%\cscript\`
 
 Subcommands:
 

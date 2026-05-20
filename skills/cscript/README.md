@@ -1,4 +1,4 @@
-# compile-task
+# cscript
 
 Compile one-off LLM tasks into reusable, self-contained executables so you stop paying tokens to redo deterministic work.
 
@@ -29,7 +29,22 @@ cscript edit <name>                # open in $EDITOR
 cscript rm <name>                  # archive and unregister
 cscript state-dir <name>           # print per-script state dir
 cscript where                      # print the data directory
+cscript version                    # print the dispatcher version
+cscript mine                       # surface repeated `which` misses worth compiling
 ```
+
+## Surfacing candidates from your history
+
+Per-prompt hooks are expensive (latency on every turn) and can only catch already-registered scripts — they can never propose new ones. Instead, `cscript` keeps a small local log of every `which` query and lets you mine it on demand:
+
+```
+cscript mine            # tasks you've asked for 2+ times that the catalogue never matched
+cscript mine --min 1    # every miss
+```
+
+The signal is direct: you (or an agent on your behalf) ran `cscript which "<task>"`, the catalogue returned nothing, and that happened more than once. Those are exactly the tasks worth compiling next.
+
+A smarter miner that reads Claude Code session transcripts and shell history is planned but deliberately deferred until the invocation log has enough real data to validate the algorithm.
 
 ## Design choices
 
@@ -46,9 +61,9 @@ It won't compile one-off explorations, judgement-laden tasks (refactoring, PR de
 ## Usage
 
 ```
-/compile-task rename JPGs in this directory by the EXIF date they were shot
-/compile-task pull all comments from GitHub PR https://github.com/foo/bar/pull/42 as markdown
-/compile-task strip EXIF from every image under a folder
+/cscript rename JPGs in this directory by the EXIF date they were shot
+/cscript pull all comments from GitHub PR https://github.com/foo/bar/pull/42 as markdown
+/cscript strip EXIF from every image under a folder
 ```
 
 Or just describe a task and let the skill decide whether to compile it.

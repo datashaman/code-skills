@@ -3,7 +3,7 @@
 # requires-python = ">=3.11"
 # dependencies = ["platformdirs>=4.2"]
 # ///
-"""cscript — dispatcher for scripts created by the compile-task skill.
+"""cscript — dispatcher for scripts created by the /cscript skill.
 
 Stores generated scripts in an OS-correct appdata directory and exposes
 them through a small set of subcommands. See `cscript --help` for usage.
@@ -17,10 +17,13 @@ import json
 import os
 from pathlib import Path
 import shutil
+import string
 import subprocess
 import sys
 
 from platformdirs import user_data_dir
+
+VERSION = "0.3.0"
 
 APP = "cscript"
 DATA = Path(os.environ.get("CSCRIPT_DATA_DIR") or user_data_dir(APP))
@@ -28,6 +31,7 @@ SCRIPTS = DATA / "scripts"
 ARCHIVE = SCRIPTS / ".archive"
 STATE = DATA / "state"
 INDEX = DATA / "index.json"
+WHICH_LOG = DATA / "which.log"
 
 EXT = {"bash": ".sh", "python": ".py", "powershell": ".ps1"}
 
@@ -75,7 +79,7 @@ def resolve(name: str) -> dict | None:
 def cmd_list(_args: argparse.Namespace) -> int:
     items = load_index()
     if not items:
-        print("No scripts registered yet. Use the /compile-task skill to create one.")
+        print("No scripts registered yet. Use the /cscript skill to create one.")
         return 0
     width = max(len(i["name"]) for i in items)
     for item in sorted(items, key=lambda x: x["name"]):
@@ -84,10 +88,50 @@ def cmd_list(_args: argparse.Namespace) -> int:
     return 0
 
 
+_STOPWORDS = frozenset(
+    """
+    this that what with from have your into onto over under about above below
+    when where which while would should could does done been being just like
+    such than then them they those well very also even more most some many
+    much both either neither
+    """.split()
+)
+_MIN_QUERY_TOKEN_LEN = 4
+_PUNCT_TRANS = str.maketrans({c: " " for c in string.punctuation})
+
+
+def _query_tokens(query: str) -> list[str]:
+    """Split the query into matchable tokens.
+
+    Drops tokens shorter than `_MIN_QUERY_TOKEN_LEN` and common stopwords so
+    short noise words ("is", "the", "what") don't substring-match into longer
+    haystack words ("isolate", "there", "whatever").
+    """
+    cleaned = query.lower().translate(_PUNCT_TRANS)
+    return [t for t in cleaned.split() if len(t) >= _MIN_QUERY_TOKEN_LEN and t not in _STOPWORDS]
+
+
+def _log_which(query: str, top_hit: str | None) -> None:
+    """Append a query to the invocation log. Best-effort; never raises."""
+    try:
+        ensure_dirs()
+        entry = {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "query": query,
+            "hit": top_hit,
+        }
+        with WHICH_LOG.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(entry) + "\n")
+    except OSError:
+        pass
+
+
 def cmd_which(args: argparse.Namespace) -> int:
     items = load_index()
-    query = args.query.lower()
-    tokens = [t for t in query.split() if t]
+    tokens = _query_tokens(args.query)
+    if not tokens:
+        _log_which(args.query, None)
+        return 1
     scored: list[tuple[int, dict]] = []
     for item in items:
         score = 0
@@ -101,8 +145,10 @@ def cmd_which(args: argparse.Namespace) -> int:
         if score:
             scored.append((score, item))
     if not scored:
+        _log_which(args.query, None)
         return 1
     scored.sort(reverse=True, key=lambda x: x[0])
+    _log_which(args.query, scored[0][1]["name"])
     width = max(len(s[1]["name"]) for s in scored[:5])
     for _, item in scored[:5]:
         print(f"  {item['name']:<{width}}  {item['description']}")
@@ -260,6 +306,91 @@ def cmd_where(_args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_version(_args: argparse.Namespace) -> int:
+    print(VERSION)
+    return 0
+
+
+def _load_which_log() -> list[dict]:
+    if not WHICH_LOG.exists():
+        return []
+    entries: list[dict] = []
+    for line in WHICH_LOG.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entries.append(json.loads(line))
+        except json.JSONDecodeError:
+            continue
+    return entries
+
+
+def cmd_mine(args: argparse.Namespace) -> int:
+    """Surface recurring `which` queries that found nothing — script candidates.
+
+    The signal is: the user (or the skill on their behalf) asked the catalogue
+    for a script N times with effectively the same prompt, and the catalogue
+    had nothing. That's a direct intent-to-reuse signal — exactly the thing
+    we want to compile.
+    """
+    entries = _load_which_log()
+    if not entries:
+        print(
+            "No `cscript which` history yet. Mining looks for repeated catalogue\n"
+            "misses — keep using cscript and try again later.",
+            file=sys.stderr,
+        )
+        return 0
+
+    misses = [e for e in entries if not e.get("hit")] if not args.include_hits else entries
+
+    clusters: dict[str, list[str]] = {}
+    for entry in misses:
+        query = entry.get("query") or ""
+        tokens = _query_tokens(query)
+        if not tokens:
+            continue
+        fingerprint = " ".join(sorted(set(tokens)))
+        clusters.setdefault(fingerprint, []).append(query)
+
+    ranked = sorted(
+        ((len(qs), fp, qs) for fp, qs in clusters.items() if len(qs) >= args.min),
+        reverse=True,
+    )
+
+    if not ranked:
+        msg = (
+            f"No patterns repeated {args.min}+ times in the `which` log "
+            f"({len(misses)} entries scanned).\n"
+            "Keep using cscript and try again in a week, or pass --min 1 to see every miss."
+        )
+        print(msg, file=sys.stderr)
+        return 0
+
+    print(f"Found {len(ranked)} repeated catalogue miss(es):\n")
+    for count, _fp, samples in ranked[: args.limit]:
+        unique: list[str] = []
+        for s in samples:
+            if s not in unique:
+                unique.append(s)
+        print(f"  [{count}x] {unique[0]}")
+        for sample in unique[1:3]:
+            print(f"        ↳ {sample}")
+        if len(unique) > 3:
+            print(f"        ↳ ...and {len(unique) - 3} more variant(s)")
+        print()
+    sys.stdout.flush()
+
+    print(
+        "These are tasks you've asked for that the catalogue couldn't fulfil.\n"
+        "Use `/cscript <task>` (or describe one to an agent that knows this skill)\n"
+        "to compile any of them.",
+        file=sys.stderr,
+    )
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     summary = (__doc__ or "cscript").splitlines()[0]
     p = argparse.ArgumentParser(prog="cscript", description=summary)
@@ -267,6 +398,20 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("list", help="list registered scripts")
     sub.add_parser("where", help="print the data directory")
+    sub.add_parser("version", help="print the dispatcher version")
+
+    pm = sub.add_parser(
+        "mine",
+        help="surface recurring `which` misses worth compiling",
+        description="Aggregate the `cscript which` invocation log into ranked "
+        "candidate tasks. The signal is: same effective query asked N+ times, "
+        "catalogue had no match.",
+    )
+    pm.add_argument("--min", type=int, default=2, help="minimum repeats to surface (default: 2)")
+    pm.add_argument("--limit", type=int, default=20, help="max candidates to print (default: 20)")
+    pm.add_argument(
+        "--include-hits", action="store_true", help="also include queries that did match something"
+    )
 
     pw = sub.add_parser("which", help="fuzzy match against names/descriptions")
     pw.add_argument("query")
@@ -297,7 +442,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     psd.add_argument("name")
 
-    preg = sub.add_parser("register", help="(used by the compile-task skill)")
+    preg = sub.add_parser("register", help="(used by the /cscript skill)")
     preg.add_argument("--source", required=True, help="path to the freshly-written script file")
     preg.add_argument("--name", required=True)
     preg.add_argument("--description", required=True)
@@ -324,6 +469,8 @@ def main(argv: list[str] | None = None) -> int:
         "state-dir": cmd_state_dir,
         "register": cmd_register,
         "where": cmd_where,
+        "version": cmd_version,
+        "mine": cmd_mine,
     }
     return handlers[args.cmd](args)
 

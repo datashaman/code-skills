@@ -1,20 +1,20 @@
 ---
-name: compile-task
+name: cscript
 description: |
   Compile a one-off task description into a reusable, self-contained
   executable script so the LLM doesn't have to do the same work again.
   Picks bash for trivial file/shell ops, single-file uv Python (PEP 723)
-  for anything needing libraries. Registers scripts in an OS-correct
-  appdata directory and exposes them through a `cscript` dispatcher
-  installed on PATH. Future invocations match the description against
-  the index and re-run the existing script instead of regenerating.
-  Use when the user says "compile this", "make a script for X",
-  "stash this as a script", "save this so I don't have to ask again",
-  or describes a task that sounds like it will recur.
+  for anything needing libraries, or PowerShell for Windows-native work.
+  Registers scripts in an OS-correct appdata directory and exposes them
+  through a `cscript` dispatcher installed on PATH. Future invocations
+  match the description against the index and re-run the existing script
+  instead of regenerating. Use when the user says "compile this", "make
+  a script for X", "stash this as a script", "save this so I don't have
+  to ask again", or describes a task that sounds like it will recur.
 user-invocable: true
 ---
 
-# compile-task — turn prompts into reusable executables
+# cscript — turn prompts into reusable executables
 
 The point of this skill is to **stop paying an LLM to redo deterministic work**. Each time the user describes a task that could be a script, compile it once, register it in the catalogue, and run the registered script from then on. Generation is the exception; execution is the rule.
 
@@ -38,7 +38,9 @@ In order, before anything else:
 
 2. **Check whether the dispatcher is installed and on PATH.** Run `command -v cscript >/dev/null 2>&1`.
 
-3. **If `cscript` is missing, install it.** The source lives at `scripts/cscript` relative to this `SKILL.md`. Resolve the path from wherever this file was loaded; if you cannot find it, ask the user for the skill directory rather than guessing.
+   If installed, also check it is not stale: compare `cscript version` against the source's version. The source's version is the `VERSION = "..."` line near the top of `scripts/cscript`. If they differ (or the installed binary predates `version` and errors), treat it as missing and re-install it the same way as a fresh install — copying over the existing file. Tell the user you are upgrading their dispatcher.
+
+3. **If `cscript` is missing (or stale), install it.** The source lives at `scripts/cscript` relative to this `SKILL.md`. Resolve the path from wherever this file was loaded; if you cannot find it, ask the user for the skill directory rather than guessing.
 
    Pick a destination directory that is **user-writable and already on `PATH`**:
 
@@ -160,7 +162,22 @@ Subcommands:
 | `cscript rm <name>` | Archive the file to `scripts/.archive/` and drop its index entry and state directory. |
 | `cscript state-dir <name>` | Print (creating if missing) the per-script state directory under the appdata dir. |
 | `cscript where` | Print the data directory path. |
+| `cscript version` | Print the dispatcher version. |
+| `cscript mine` | Rank repeated catalogue misses from the `which` log to surface things worth compiling. |
 | `cscript register …` | Used by this skill at compile time; not normally hand-invoked. |
+
+## Surfacing candidates from history
+
+`cscript which` appends every query to a local invocation log (`which.log` under the data dir). `cscript mine` reads it back and ranks queries that have been asked 2+ times but never matched anything in the catalogue — direct "I tried to reuse but couldn't" signal.
+
+Run it on-demand:
+
+```sh
+cscript mine            # repeated misses, default threshold 2
+cscript mine --min 1    # every miss
+```
+
+When you (the agent) see repeated patterns in your conversation that the user hasn't asked to compile yet, suggest `cscript mine` so they can review what's worth stashing.
 
 ## Regeneration
 

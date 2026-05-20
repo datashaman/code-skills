@@ -104,6 +104,21 @@ Trello board health audit. Queries five dimensions of card data to identify thro
 /audit-trello board="My Board" since=2024-07-01
 ```
 
+### `/compile-task`
+
+Compile one-off task descriptions into reusable, self-contained executables so the LLM doesn't redo deterministic work each time. Picks bash for trivial file/shell ops or single-file `uv` Python (PEP 723 inline deps) for anything needing libraries. Scripts are registered in an appdata-backed catalogue and dispatched through a `cscript` binary the skill installs to a user-writable directory on `PATH`. From the second invocation onward the agent finds the script via `cscript which`, confirms with you, and runs it directly — no regeneration.
+
+Ships with a `cscript` dispatcher (`list`, `which`, `run`, `show`, `edit`, `rm`, `state-dir`, `where`, `register`) and a smoke-test script. macOS and Linux only.
+
+**Arguments:** None — describe the task in natural language and the skill decides whether to compile it, match an existing script, or skip.
+
+**Usage:**
+```
+/compile-task rename JPGs in this directory by the EXIF date they were shot
+/compile-task pull all comments from GitHub PR https://github.com/foo/bar/pull/42 as markdown
+/compile-task strip EXIF from every image under a folder
+```
+
 ### `/workflow-advisor`
 
 Interview-driven process automation for software teams. Helps adopt and run spec-driven development and related practices through a progressive team interview, a versioned `.workflow/` configuration, GitHub workflow generation, event playbooks, lifecycle gates, process reports, and reconcile loops for pushes, pull requests, issues, and comments.

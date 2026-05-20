@@ -29,7 +29,7 @@ ARCHIVE = SCRIPTS / ".archive"
 STATE = DATA / "state"
 INDEX = DATA / "index.json"
 
-EXT = {"bash": ".sh", "python": ".py"}
+EXT = {"bash": ".sh", "python": ".py", "powershell": ".ps1"}
 
 
 def ensure_dirs() -> None:
@@ -127,6 +127,27 @@ def confirm_run(item: dict) -> bool:
     return answer in ("y", "yes")
 
 
+def build_invocation(path: Path, language: str, passthrough: list[str]) -> list[str]:
+    """Return the argv for running `path` as `language`, with `passthrough` appended."""
+    if sys.platform == "win32":
+        if language == "python" or path.suffix == ".py":
+            return ["uv", "run", "--script", str(path), *passthrough]
+        if language == "bash" or path.suffix == ".sh":
+            # Requires Git Bash, WSL, or another bash on PATH.
+            return ["bash", str(path), *passthrough]
+        if language == "powershell" or path.suffix == ".ps1":
+            return [
+                "pwsh",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(path),
+                *passthrough,
+            ]
+    return [str(path), *passthrough]
+
+
 def cmd_run(args: argparse.Namespace) -> int:
     item = resolve(args.name)
     if item is None:
@@ -138,9 +159,16 @@ def cmd_run(args: argparse.Namespace) -> int:
     if not args.yes and not confirm_run(item):
         print("cscript: aborted", file=sys.stderr)
         return 1
-    if not os.access(path, os.X_OK):
-        path.chmod(0o755)
-    os.execv(str(path), [str(path), *args.args])
+    if sys.platform != "win32":
+        if not os.access(path, os.X_OK):
+            path.chmod(0o755)
+        os.execv(str(path), [str(path), *args.args])
+    argv = build_invocation(path, item.get("language", ""), args.args)
+    try:
+        return subprocess.run(argv).returncode
+    except FileNotFoundError as exc:
+        print(f"cscript: {exc.filename or argv[0]} not found on PATH", file=sys.stderr)
+        return 127
 
 
 def cmd_show(args: argparse.Namespace) -> int:

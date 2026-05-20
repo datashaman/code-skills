@@ -7,7 +7,7 @@ Compile one-off LLM tasks into reusable, self-contained executables so you stop 
 When you describe a task ("rename these photos by their EXIF date", "pull this GitHub issue's comments as markdown"), the skill:
 
 1. Checks a catalogue of previously-compiled scripts and offers to re-run an existing one if it matches.
-2. Otherwise picks the simplest language for the job — **bash** for trivial file/shell ops, **single-file uv Python** (PEP 723 inline deps) for anything that needs libraries.
+2. Otherwise picks the simplest language for the job — **bash** for POSIX shell ops, **PowerShell** for Windows-native or shell-y tasks on Windows, **single-file uv Python** (PEP 723 inline deps) as the cross-platform default for anything needing libraries.
 3. Writes the script, smoke-tests it, registers it in the catalogue, and runs it.
 
 From then on, the script is one command:
@@ -18,7 +18,7 @@ cscript run rename-by-exif-date ./photos
 
 ## The `cscript` dispatcher
 
-A single Python script installed on first use into a user-writable directory on `PATH`. It stores everything in an OS-correct appdata directory (`~/Library/Application Support/cscript/` on macOS, `~/.local/share/cscript/` on Linux). macOS and Linux only.
+A single Python script installed on first use into a user-writable directory on `PATH` (on Windows, paired with a small `cscript.cmd` wrapper). It stores everything in an OS-correct appdata directory: `~/Library/Application Support/cscript/` on macOS, `~/.local/share/cscript/` on Linux, `%LOCALAPPDATA%\cscript\` on Windows. Bash scripts on Windows require Git Bash or WSL.
 
 ```
 cscript list                       # show all registered scripts

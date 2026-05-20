@@ -106,9 +106,9 @@ Trello board health audit. Queries five dimensions of card data to identify thro
 
 ### `/compile-task`
 
-Compile one-off task descriptions into reusable, self-contained executables so the LLM doesn't redo deterministic work each time. Picks bash for trivial file/shell ops or single-file `uv` Python (PEP 723 inline deps) for anything needing libraries. Scripts are registered in an appdata-backed catalogue and dispatched through a `cscript` binary the skill installs to a user-writable directory on `PATH`. From the second invocation onward the agent finds the script via `cscript which`, confirms with you, and runs it directly — no regeneration.
+Compile one-off task descriptions into reusable, self-contained executables so the LLM doesn't redo deterministic work each time. Picks bash for POSIX shell ops, PowerShell for Windows-native work, or single-file `uv` Python (PEP 723 inline deps) for anything needing libraries. Scripts are registered in an appdata-backed catalogue and dispatched through a `cscript` binary the skill installs to a user-writable directory on `PATH`. From the second invocation onward the agent finds the script via `cscript which`, confirms with you, and runs it directly — no regeneration.
 
-Ships with a `cscript` dispatcher (`list`, `which`, `run`, `show`, `edit`, `rm`, `state-dir`, `where`, `register`) and a smoke-test script. macOS and Linux only.
+Ships with a `cscript` dispatcher (`list`, `which`, `run`, `show`, `edit`, `rm`, `state-dir`, `where`, `register`), a Windows `cscript.cmd` wrapper, and a smoke-test script. Verified on macOS and Linux; Windows support is implemented (subprocess dispatch + `cscript.cmd` wrapper + PowerShell language option) and awaits validation by a Windows user.
 
 **Arguments:** None — describe the task in natural language and the skill decides whether to compile it, match an existing script, or skip.
 

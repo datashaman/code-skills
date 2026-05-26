@@ -148,6 +148,19 @@ Ships with four reference patterns the skill draws on: a baseline list-with-deta
 /onepager a simulated AI assistant for support triage
 ```
 
+### `/plan-website`
+
+Structured guide for planning and executing a website build from scratch or as a migration/overhaul. Walks a cross-team web project through its phases in dependency order — discovery, sitemap, content strategy, wireframes, designs, analytics plan, SEO plan, development, QA and launch — surfacing the right questions per phase, flagging missing dependencies, and enforcing sign-off gates so teams don't skip ahead to development with incomplete artifacts. Distinguishes a true *build* (content types, URL structure, or CMS change) from a cosmetic *redesign*. Generates phase-grouped markdown checklists customized to new builds, migrations, or CMS upgrades.
+
+**Arguments:** None — describe the web project in natural language and the skill locates the current phase and walks forward.
+
+**Usage:**
+```
+/plan-website we're migrating our marketing site to a new CMS
+/plan-website what deliverables do we need before development starts?
+/plan-website give me a wireframe checklist for a new blog
+```
+
 ### `/harness`
 
 > **⚠️ WIP — not ready for use.** This skill is under active development and is not yet stable. Don't install it on a setup you care about.

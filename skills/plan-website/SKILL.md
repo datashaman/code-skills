@@ -1,11 +1,11 @@
 ---
 name: plan-website
 description: |
-  Structured guide for planning and executing a website build from scratch
-  or as a migration/overhaul. Walks the project through its phases in order —
-  discovery, sitemap, content strategy, wireframes, designs, analytics plan,
-  SEO plan, development, QA and launch — with the right sign-offs at each
-  gate. Use when the user
+  Creates a Work Breakdown Structure for planning and executing a website
+  build from scratch or as a migration/overhaul. Organizes repository setup,
+  planning artifacts, implementation slices, QA gates, and launch work into
+  deliverables, work packages, and tasks, with phase checklists as supporting
+  artifacts. Use when the user
   mentions building, launching, or overhauling a website: redesigns, CMS
   migrations, new site builds, or multi-team web projects. Triggers on phrases
   like "website build", "site launch", "web project checklist", "website
@@ -15,9 +15,9 @@ description: |
 user-invocable: true
 ---
 
-# Plan Website — phased website build checklist
+# Plan Website - WBS-led website delivery planning
 
-A website build (not just a redesign — if structure, content types, or CMS change, it's a build) is a multi-month, cross-team project. This skill walks through the phases in order, surfaces the right questions per phase, and ensures nothing critical is skipped.
+A website build (not just a redesign — if structure, content types, or CMS change, it's a build) is a multi-month, cross-team project. This skill creates a Work Breakdown Structure (WBS) that carries the project from repository foundation through planning artifacts, implementation slices, verification, and launch.
 
 **Important distinction:** A *redesign* only re-skins an existing site. If content types, URL structure, database, or CMS change at all, it's a **build** — treat it accordingly.
 
@@ -39,13 +39,83 @@ Always walk through phases in this order. Each phase is a dependency for the nex
 
 When a user comes with a website build question:
 
-1. **Identify where they are** in the phase sequence.
-2. **Surface the right questions** for that phase (see per-phase sections below).
-3. **Flag missing dependencies** — if they're in Phase 4 but have no signed-off wireframes, flag it.
-4. **Generate deliverables** on request — checklists, template lists, brief outlines, review criteria.
-5. **Don't let teams skip phases** — gently push back if someone wants to go straight to dev without content strategy or wireframes.
+1. **Identify the project type and current phase** in the dependency sequence.
+2. **Create or preserve the WBS** as the source of truth for build plans, delivery plans, roadmaps, Growth projects, Jira epic lists, or implementation checklists.
+3. **Surface the right questions** for the current phase (see per-phase sections below).
+4. **Flag missing dependencies** — if they're in Phase 4 but have no signed-off wireframes, flag it.
+5. **Attach supporting artifacts** to WBS items — checklists, template lists, brief outlines, review criteria, entry criteria, exit criteria, and sign-off gates.
+6. **Don't let teams skip delivery work** — gently push back if the plan can reach QA or launch without a repository, implementation tasks, checks, deployments, and runnable behavior.
 
-When generating a project checklist, format it as a markdown checklist grouped by phase, customized to their project type (new build vs. migration vs. CMS upgrade).
+When the user explicitly asks what documents are needed before development, a document-only planning answer is allowed. When the user asks for a build plan, delivery plan, roadmap, Growth project, Jira epic list, WBS, or implementation checklist, create a WBS first and attach checklists to the relevant WBS items.
+
+## Primary Output
+
+The primary output is a Work Breakdown Structure.
+
+Use checklists as supporting artifacts for specific phases, entry criteria, exit criteria, reviews, QA, and launch. Do not let checklists become the plan.
+
+When the user asks for a website build plan, create a WBS first. Then attach phase checklists, review criteria, and sign-off gates to the relevant WBS items.
+
+## Delivery Invariant
+
+The primary output of this skill is a WBS, not a checklist. If the user asks for a project plan, roadmap, Growth project, Jira epic list, delivery plan, or implementation checklist, produce or preserve a WBS as the source of truth.
+
+Never produce a WBS where discovery, sitemap, content, wireframes, designs, analytics plans, SEO plans, QA, and launch are the only work items. Those are supporting artifacts. They are not the whole build.
+
+A valid WBS must include:
+
+- an upfront repository creation/foundation task before substantial planning artifacts are generated
+- deliverables, work packages, and tasks
+- implementation work packages for each major user-facing capability
+- tasks that produce code, configuration, migrations, tests, integrations, deployed environments, or runnable behavior
+- QA/launch gates that depend on completed implementation work
+- explicit rejection of launch readiness if no runnable site/app exists
+
+## Work Breakdown Structure
+
+For delivery planning, always create a WBS. A phase checklist is not enough and must not be presented as the plan.
+
+The WBS must include:
+
+- root deliverables tied to working increments or launch gates
+- work packages under each deliverable
+- implementation tasks under build work packages
+- repository/artifact setup as the first foundation work package
+- QA/launch tasks that depend on implemented software
+
+The WBS must make it impossible to complete the project by finishing documents alone. If most WBS leaves are documents, specs, reviews, or checklists, revise it before presenting it.
+
+## Repository Foundation
+
+For any build, migration, CMS implementation, or redesign that changes code, templates, infrastructure, integrations, or deployment behavior, the plan must create or select the repository upfront, before generating substantial project artifacts.
+
+Do not wait until a late "Development" phase to create the repo. The repository is the project memory from day one: discovery notes, sitemaps, content models, wireframes, design specs, analytics plans, SEO plans, ADRs, implementation plans, and QA runbooks should live there as versioned artifacts. Later, the same repository becomes the source of implementation evidence through commits, PRs, checks, deployments, and review history.
+
+The repository foundation work item should cover:
+
+- create or select the source repository
+- establish the documentation/artifact folder structure
+- commit initial project README and planning artifact index
+- choose initial stack/framework/CMS structure
+- add local development commands
+- add baseline CI checks
+- add environment/configuration strategy
+- add first deployable/staging path where applicable
+
+## Anti-Patterns To Prevent
+
+Reject or revise any plan with these smells:
+
+- There is no WBS.
+- The WBS is only a flat phase checklist.
+- The WBS leaf tasks are mostly documents, specs, reviews, or sign-offs.
+- There is no upfront "create/select repository" task before docs/specs are produced.
+- Planning artifacts are assumed to live only in chat, shared drives, or external docs with no versioned project home.
+- Phase 7 is a single "Development" placeholder.
+- QA/Launch has detailed checklists but development has no child work.
+- Most tasks are named "define," "document," "plan," "specify," or "review."
+- The plan can reach launch readiness without commits, PRs, checks, deployments, or runnable staging behavior.
+- Evidence is treated as manually attaching links rather than producing real implementation artifacts.
 
 ## Phase 0: Discovery
 
@@ -224,25 +294,58 @@ Each component and functional element should have a short written brief covering
 
 ## Phase 7: Development
 
-**What it is:** The phase where all prior plans are assembled into a live site.
+**What it is:** The build workstream where plans become runnable software, configuration, migrations, integrations, tests, and deployable environments.
 
-**Why it matters:** By the time dev starts, months of planning from other teams have stacked up. Any incomplete deliverable, missing content, or overlooked functionality surfaces here — at maximum cost. Dev teams should not be chasing answers from other teams during this phase.
+**Why it matters:** Development is not one checkbox and not "assemble prior plans." For a build project, implementation work must be decomposed into vertical slices that produce working increments. QA and launch cannot verify documents in place of runnable behavior.
 
-**Pre-development checklist:**
+When generating a project plan, break development into vertical implementation slices such as:
 
+- project foundation: repository, framework, environments, CI, deployment
+- content model/CMS schema implementation
+- template/page implementation
+- navigation/search/forms implementation
+- migration/import scripts
+- analytics and SEO technical implementation
+- integrations
+- accessibility/performance hardening
+- content publishing workflow
+- production deployment
+
+Each slice must have acceptance criteria based on runnable behavior:
+
+- code exists
+- tests/checks run where practical
+- staging or local demo can exercise the feature
+- QA can verify it against the relevant plan
+
+**Development entry checklist:**
+
+- [ ] Repository exists and contains the project README, artifact index, and planning history
 - [ ] Sitemap finalized and signed off
 - [ ] Content strategy complete; content either ready or on a firm schedule
 - [ ] Wireframes complete for all templates, all breakpoints, signed off by all teams
 - [ ] Designs complete, component-based, signed off by all teams
 - [ ] Analytics plan delivered to dev
 - [ ] SEO plan delivered to dev (including redirect map)
-- [ ] All open questions resolved
+- [ ] All implementation slices are represented in the WBS with acceptance criteria
+- [ ] All open questions resolved or explicitly tracked as blockers
 
 ## Phase 8: QA & Launch
 
 **What it is:** The phase that takes a built site from "done on staging" to "live and verified in production."
 
 **Why it matters:** Launch day is where the cost of every earlier shortcut comes due. A missing redirect tanks SEO rankings; an untested form silently drops leads; no rollback plan turns a small bug into an outage. Treat go-live as a deliberate, checklisted event — not the moment dev happens to finish.
+
+Phase 8 cannot start unless:
+
+- a repository exists and contains both the planning artifact history and implementation history
+- the WBS includes completed implementation work packages for in-scope features
+- a runnable staging or production-candidate environment exists
+- all in-scope templates/features have implementation work items
+- forms, redirects, analytics, CMS editing, and public pages are implemented
+- QA is testing software behavior, not documents
+
+Explicitly reject launch readiness if no runnable site/app exists.
 
 **Common deliverables:**
 

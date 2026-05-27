@@ -150,7 +150,7 @@ Ships with four reference patterns the skill draws on: a baseline list-with-deta
 
 ### `/plan-website`
 
-Structured guide for planning and executing a website build from scratch or as a migration/overhaul. Walks a cross-team web project through its phases in dependency order — discovery, sitemap, content strategy, wireframes, designs, analytics plan, SEO plan, development, QA and launch — surfacing the right questions per phase, flagging missing dependencies, and enforcing sign-off gates so teams don't skip ahead to development with incomplete artifacts. Distinguishes a true *build* (content types, URL structure, or CMS change) from a cosmetic *redesign*. Generates phase-grouped markdown checklists customized to new builds, migrations, or CMS upgrades.
+Creates a Work Breakdown Structure for website builds, migrations, redesigns, and CMS implementations. The WBS is the primary plan: it organizes repository setup, planning artifacts, implementation slices, QA gates, and launch work into deliverables, work packages, and tasks. Generates phase checklists and review criteria as supporting artifacts, not as a substitute for the plan.
 
 **Arguments:** None — describe the web project in natural language and the skill locates the current phase and walks forward.
 

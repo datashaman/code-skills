@@ -2,10 +2,10 @@
 name: plan-website
 description: |
   Creates a Work Breakdown Structure for planning and executing a website
-  build from scratch or as a migration/overhaul. Organizes repository setup,
-  planning artifacts, implementation slices, QA gates, and launch work into
-  deliverables, work packages, and tasks, with phase checklists as supporting
-  artifacts. Use when the user
+  build from scratch or as a migration/overhaul. Organizes platform and stack
+  requirements, repository setup, planning artifacts, implementation slices,
+  QA gates, and launch work into deliverables, work packages, and tasks, with
+  phase checklists as supporting artifacts. Use when the user
   mentions building, launching, or overhauling a website: redesigns, CMS
   migrations, new site builds, or multi-team web projects. Triggers on phrases
   like "website build", "site launch", "web project checklist", "website
@@ -17,7 +17,7 @@ user-invocable: true
 
 # Plan Website - WBS-led website delivery planning
 
-A website build (not just a redesign — if structure, content types, or CMS change, it's a build) is a multi-month, cross-team project. This skill creates a Work Breakdown Structure (WBS) that carries the project from repository foundation through planning artifacts, implementation slices, verification, and launch.
+A website build (not just a redesign — if structure, content types, or CMS change, it's a build) is a multi-month, cross-team project. This skill creates a Work Breakdown Structure (WBS) that carries the project from platform and stack requirements through repository foundation, planning artifacts, implementation slices, verification, and launch.
 
 **Important distinction:** A *redesign* only re-skins an existing site. If content types, URL structure, database, or CMS change at all, it's a **build** — treat it accordingly.
 
@@ -65,6 +65,9 @@ Never produce a WBS where discovery, sitemap, content, wireframes, designs, anal
 A valid WBS must include:
 
 - an upfront repository creation/foundation task before substantial planning artifacts are generated
+- platform and stack requirements covering language, framework, CMS, hosting, runtime, data stores, integrations, and operational constraints
+- CI workflow, local verification commands, and a test strategy before other testable implementation work starts
+- wireframe dependencies and browser acceptance tests for every UI-bearing implementation work item
 - deliverables, work packages, and tasks
 - implementation work packages for each major user-facing capability
 - tasks that produce code, configuration, migrations, tests, integrations, deployed environments, or runnable behavior
@@ -81,9 +84,71 @@ The WBS must include:
 - work packages under each deliverable
 - implementation tasks under build work packages
 - repository/artifact setup as the first foundation work package
+- technical requirements and platform decision work before framework-specific implementation tasks
+- CI/test foundation work before feature, template, integration, migration, or CMS implementation slices
+- UI-bearing work items tied to approved wireframes and browser acceptance tests
 - QA/launch tasks that depend on implemented software
 
 The WBS must make it impossible to complete the project by finishing documents alone. If most WBS leaves are documents, specs, reviews, or checklists, revise it before presenting it.
+
+## Technical Requirements And Platform Fit
+
+Every build WBS must make language, framework, platform, and hosting requirements explicit before implementation slices are estimated or assigned.
+
+Capture known constraints and open decisions for:
+
+- language/runtime requirements, such as Node.js, PHP, Ruby, Python, .NET, Java, or static HTML
+- frontend framework requirements, such as React, Next.js, Astro, Vue, SvelteKit, Laravel Blade, WordPress themes, or platform-native templates
+- CMS/platform requirements, such as WordPress, Drupal, Webflow, Shopify, Contentful, Sanity, Strapi, HubSpot CMS, or a custom admin
+- hosting/deployment target, such as Vercel, Netlify, AWS, Azure, GCP, Cloudflare, managed WordPress, Shopify, or existing client infrastructure
+- database/search/cache/queue requirements where applicable
+- authentication, forms, payments, CRM, marketing automation, analytics, consent, localization, and other integration requirements
+- browser/device support, accessibility target, performance budget, security/compliance constraints, and content editor workflow needs
+- team constraints, including existing skills, preferred tools, maintainability expectations, licensing, budget, and handover requirements
+
+If the stack is undecided, add a WBS work package for platform evaluation and decision records. Do not generate framework-specific implementation tasks until the assumptions are named. If the user only needs early planning, capture the open decisions and mark downstream implementation estimates as provisional.
+
+## CI And Test Foundation
+
+For any build with code, templates, configuration, migrations, or integrations, the WBS must establish a CI/test foundation before feature implementation slices begin.
+
+The CI/test foundation work item should cover:
+
+- define local verification commands for linting, type checks, unit tests, integration tests, build checks, and content/schema validation where relevant
+- add the CI workflow before other testable work items start
+- make CI run the same core checks developers run locally
+- include at least one initial runnable check, even if deeper coverage is added by later slices
+- define test ownership for templates, CMS schema/content model, forms, redirects, analytics events, integrations, accessibility, performance, and deployment smoke tests
+- require each later implementation slice to add or update relevant tests/checks as part of its acceptance criteria
+
+If the platform cannot support automated checks for a specific area, name the limitation and add a manual verification task with an owner. Do not let "QA later" replace the CI/test foundation.
+
+## UI Work Acceptance
+
+Every UI-bearing work item must have corresponding wireframes before implementation starts and browser acceptance testing before it is considered complete.
+
+This applies to:
+
+- page templates
+- layouts and responsive breakpoints
+- navigation and menus
+- search interfaces
+- forms and validation states
+- CMS editing previews or authoring UI where in scope
+- interactive components, filters, calculators, maps, account areas, checkout flows, or other user-facing behavior
+- error states, empty states, loading states, success states, and 404/redirect handling where visible to users
+
+For each UI-bearing WBS item, require:
+
+- linked wireframe or explicit wireframe gap/blocker
+- responsive states for mobile, tablet, and desktop where relevant
+- browser acceptance criteria based on user-observable behavior
+- automated browser checks where practical, such as Playwright, Cypress, WebdriverIO, or platform-native browser testing
+- manual cross-browser/device verification where automation is not practical
+- accessibility checks for keyboard operation, focus order, semantic structure, labels, alt text, and contrast
+- visual/layout verification that text, controls, and media do not overlap or break at supported viewport sizes
+
+Do not allow UI implementation tasks to be marked ready if the wireframe dependency is missing. Do not allow UI work to be marked done with only unit tests or code review; browser acceptance evidence is required.
 
 ## Repository Foundation
 
@@ -96,9 +161,9 @@ The repository foundation work item should cover:
 - create or select the source repository
 - establish the documentation/artifact folder structure
 - commit initial project README and planning artifact index
-- choose initial stack/framework/CMS structure
+- document technical requirements and choose the initial language/framework/CMS/platform structure
 - add local development commands
-- add baseline CI checks
+- add baseline CI workflow and test strategy before feature implementation starts
 - add environment/configuration strategy
 - add first deployable/staging path where applicable
 
@@ -111,6 +176,12 @@ Reject or revise any plan with these smells:
 - The WBS leaf tasks are mostly documents, specs, reviews, or sign-offs.
 - There is no upfront "create/select repository" task before docs/specs are produced.
 - Planning artifacts are assumed to live only in chat, shared drives, or external docs with no versioned project home.
+- Language, framework, CMS, hosting, runtime, or integration requirements are missing or buried as assumptions.
+- The plan assigns implementation tasks before the stack/platform decision is explicit.
+- CI/test setup is postponed until after feature work starts.
+- Feature, template, migration, CMS, or integration tasks have acceptance criteria but no corresponding test/check strategy.
+- UI-bearing work items have no corresponding wireframes.
+- UI-bearing work items are considered complete without browser acceptance testing.
 - Phase 7 is a single "Development" placeholder.
 - QA/Launch has detailed checklists but development has no child work.
 - Most tasks are named "define," "document," "plan," "specify," or "review."
@@ -131,6 +202,7 @@ Reject or revise any plan with these smells:
 - Personas and user journeys
 - Brand guidelines / brand book
 - Success metrics and KPIs
+- Technical requirements and platform constraints brief
 
 **Questions to ask:**
 
@@ -138,6 +210,10 @@ Reject or revise any plan with these smells:
 - Who are the main audiences, and what do they come to do?
 - Who are the decision-makers and sign-off owners?
 - Do brand guidelines already exist, or are they part of this project?
+- Is there an existing language, framework, CMS, hosting platform, or infrastructure constraint?
+- Who will maintain the site after launch, and what stack can that team operate safely?
+- What integrations are required, such as CRM, analytics, forms, payments, search, auth, consent, or marketing automation?
+- Are there browser support, accessibility, performance, security, compliance, localization, or data residency requirements?
 
 ## Phase 1: Sitemap
 
@@ -239,6 +315,7 @@ Each component and functional element should have a short written brief covering
 - **Build mobile wireframes first** — mobile is the hardest and most constrained; work outward.
 - **Use aspect ratios for images** — allows consistent sizing across devices (common: 1:1, 3:2, 4:3, 16:9).
 - **All teams must review and sign off** — dev especially must flag issues before designs begin.
+- **Link UI work to wireframes** — every UI-bearing WBS item needs a corresponding approved wireframe or an explicit blocker.
 - Nothing proceeds to design until wireframes are finalized and approved.
 
 ## Phase 4: Designs
@@ -300,7 +377,9 @@ Each component and functional element should have a short written brief covering
 
 When generating a project plan, break development into vertical implementation slices such as:
 
-- project foundation: repository, framework, environments, CI, deployment
+- project foundation: repository, framework, runtime, environments, CI, deployment
+- platform and stack implementation: CMS/platform setup, hosting target, runtime configuration, data stores, secrets, and infrastructure
+- CI/test foundation: local verification commands, CI workflow, initial checks, and slice-level testing expectations
 - content model/CMS schema implementation
 - template/page implementation
 - navigation/search/forms implementation
@@ -314,16 +393,23 @@ When generating a project plan, break development into vertical implementation s
 Each slice must have acceptance criteria based on runnable behavior:
 
 - code exists
-- tests/checks run where practical
+- tests/checks run where practical and are included in CI or an explicit manual verification path
 - staging or local demo can exercise the feature
+- UI-bearing work has linked wireframes and browser acceptance evidence
 - QA can verify it against the relevant plan
 
 **Development entry checklist:**
 
 - [ ] Repository exists and contains the project README, artifact index, and planning history
+- [ ] Language, framework, CMS/platform, hosting, runtime, and integration requirements are documented or explicitly marked as open blockers
+- [ ] Stack/platform decision records exist for non-obvious choices
+- [ ] Local verification commands and baseline CI workflow exist before feature implementation starts
+- [ ] Test/check expectations are defined for each implementation slice
 - [ ] Sitemap finalized and signed off
 - [ ] Content strategy complete; content either ready or on a firm schedule
 - [ ] Wireframes complete for all templates, all breakpoints, signed off by all teams
+- [ ] Every UI-bearing implementation slice links to an approved wireframe or is blocked
+- [ ] Browser acceptance test approach is defined for templates, navigation, forms, and interactive UI
 - [ ] Designs complete, component-based, signed off by all teams
 - [ ] Analytics plan delivered to dev
 - [ ] SEO plan delivered to dev (including redirect map)
@@ -339,9 +425,12 @@ Each slice must have acceptance criteria based on runnable behavior:
 Phase 8 cannot start unless:
 
 - a repository exists and contains both the planning artifact history and implementation history
+- the chosen language, framework, CMS/platform, hosting target, runtime configuration, and required integrations are implemented or explicitly out of scope
+- CI has run against the production-candidate branch or release candidate, or every unsupported check has an explicit manual verification record
 - the WBS includes completed implementation work packages for in-scope features
 - a runnable staging or production-candidate environment exists
 - all in-scope templates/features have implementation work items
+- all UI-bearing implementation work has corresponding wireframes and browser acceptance evidence
 - forms, redirects, analytics, CMS editing, and public pages are implemented
 - QA is testing software behavior, not documents
 
@@ -359,6 +448,7 @@ Explicitly reject launch readiness if no runnable site/app exists.
 **Launch checklist:**
 
 - [ ] All templates QA'd across the supported browser/device matrix
+- [ ] Browser acceptance tests or manual browser verification completed for all UI-bearing work
 - [ ] 301 redirects tested — every retired URL resolves to its replacement
 - [ ] Analytics and conversion tracking verified firing in production
 - [ ] XML sitemap submitted; robots.txt and canonicals confirmed

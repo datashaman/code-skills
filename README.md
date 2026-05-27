@@ -135,7 +135,7 @@ Ships with four reference patterns the skill draws on: a baseline list-with-deta
 
 ### `/plan-website`
 
-Creates a Work Breakdown Structure for website builds, migrations, redesigns, and CMS implementations. The WBS is the primary plan: it organizes repository setup, planning artifacts, implementation slices, QA gates, and launch work into deliverables, work packages, and tasks. Generates phase checklists and review criteria as supporting artifacts, not as a substitute for the plan.
+Creates a Work Breakdown Structure for website builds, migrations, redesigns, and CMS implementations. The WBS is the primary plan: it organizes platform and stack requirements, repository setup, CI/test foundation, wireframe-linked UI work, implementation slices, QA gates, and launch work into deliverables, work packages, and tasks. Generates phase checklists and review criteria as supporting artifacts, not as a substitute for the plan.
 
 **Arguments:** None — describe the web project in natural language and the skill locates the current phase and walks forward.
 

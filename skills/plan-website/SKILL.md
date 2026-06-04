@@ -56,6 +56,24 @@ Use checklists as supporting artifacts for specific phases, entry criteria, exit
 
 When the user asks for a website build plan, create a WBS first. Then attach phase checklists, review criteria, and sign-off gates to the relevant WBS items.
 
+## Repository requirement
+
+Run this skill from inside a local git repository. The repository is the natural home for planning artifacts, ADRs, wireframes, implementation work, CI history, QA evidence, and launch records.
+
+If the user is not in a git repository, stop and say so plainly. Do not produce a substantial build plan as chat-only output when there is no project home to store the resulting artifacts. Treat repository selection or creation as the first task in the WBS.
+
+## Artifact persistence
+
+The plan and its supporting artifacts must be stored as files in the repository. Do not let the WBS, phase checklists, review gates, or planning decisions live only in chat.
+
+Chat is for:
+
+- summarizing what changed
+- explaining blockers or assumptions
+- linking to the files that now hold the plan
+
+Chat is not the source of truth.
+
 ## Delivery Invariant
 
 The primary output of this skill is a WBS, not a checklist. If the user asks for a project plan, roadmap, Growth project, Jira epic list, delivery plan, or implementation checklist, produce or preserve a WBS as the source of truth.
@@ -167,6 +185,8 @@ The repository foundation work item should cover:
 - add environment/configuration strategy
 - add first deployable/staging path where applicable
 
+The repository foundation work item should also define where the WBS, phase artifacts, wireframes, ADRs, and QA evidence will be stored so later work does not drift back into chat.
+
 ## Anti-Patterns To Prevent
 
 Reject or revise any plan with these smells:
@@ -238,6 +258,8 @@ Reject or revise any plan with these smells:
 
 **What it is:** A plan that defines what content exists, what changes, and how content and site structure work together.
 
+**Non-negotiable:** This phase is not only about hierarchy or page inventory. It should consider content types, how they are presented, what inputs need to be captured, and any editorial constraints before wireframes and designs are treated as ready.
+
 **Why it matters:** Content teams and UX/design must work in parallel — content shapes the most prominent components on the site. Starting dev without a content plan leads to placeholder hell and late-stage rework.
 
 **Common deliverables:**
@@ -245,6 +267,8 @@ Reject or revise any plan with these smells:
 - Content audit (what to rewrite, redirect, or retire)
 - New hub page outlines and copy
 - Service/product page rewrites
+- Content models or CMS field definitions
+- Page-level content input requirements
 - Character limits on hero and CTA copy
 - CTA button copy guidelines
 
@@ -252,6 +276,10 @@ Reject or revise any plan with these smells:
 
 - Is there existing content to audit, or is this greenfield?
 - Are there keyword or SEO targets driving the content structure?
+- What content types appear on the important pages and templates?
+- Are any of them reusable across multiple pages?
+- Are there forms, filters, uploads, or other inputs whose capture requirements affect the page structure?
+- What editorial, legal, brand, SEO, or governance constraints shape that content?
 - Who owns content creation — internal team or agency?
 
 ## Phase 3: Wireframes
@@ -266,7 +294,7 @@ Reject or revise any plan with these smells:
 - Define image aspect ratios for every image placeholder
 - No color — white, black, and grays only
 - Consider the critical path for every template
-- Avoid real content (use placeholder text)
+- Use representative content shapes and lengths rather than polished final copy
 - Create mobile, tablet, and desktop versions for every template
 
 ### Required templates

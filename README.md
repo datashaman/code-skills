@@ -135,15 +135,28 @@ Ships with four reference patterns the skill draws on: a baseline list-with-deta
 
 ### `/plan-website`
 
-Creates a Work Breakdown Structure for website builds, migrations, redesigns, and CMS implementations. The WBS is the primary plan: it organizes platform and stack requirements, repository setup, CI/test foundation, wireframe-linked UI work, implementation slices, QA gates, and launch work into deliverables, work packages, and tasks. Generates phase checklists and review criteria as supporting artifacts, not as a substitute for the plan.
+Creates a Work Breakdown Structure for website builds, migrations, redesigns, and CMS implementations. The WBS is the primary plan: it organizes platform and stack requirements, repository setup, CI/test foundation, wireframe-linked UI work, implementation slices, QA gates, and launch work into deliverables, work packages, and tasks. Generates phase checklists and review criteria as supporting artifacts, not as a substitute for the plan, and expects those artifacts to be stored as files in the repository rather than left in chat.
 
-**Arguments:** None — describe the web project in natural language and the skill locates the current phase and walks forward.
+**Arguments:** None — run it from inside the project's git repository, then describe the web project in natural language and the skill locates the current phase and walks forward.
 
 **Usage:**
 ```
 /plan-website we're migrating our marketing site to a new CMS
 /plan-website what deliverables do we need before development starts?
 /plan-website give me a wireframe checklist for a new blog
+```
+
+### `/website-spec-pipeline`
+
+Builds a multi-stage website specification pipeline that moves from discovery through information architecture, page planning, UX structure, design system, responsive rules, wireframes, and review using JSON contracts between stages. The page specification is the core artifact, so downstream wireframes, designs, components, and views can be generated from structured inputs instead of burying decisions inside prompts. Run it from inside the project's git repository and persist each stage output as files so the workflow does not disappear into chat.
+
+**Arguments:** None — run it from inside the project's git repository, then describe the site, current stage, or desired artifact in natural language.
+
+**Usage:**
+```
+/website-spec-pipeline design a lead-gen site for a B2B consultancy
+/website-spec-pipeline turn this website brief into JSON stage contracts
+/website-spec-pipeline create page specs for the services and contact pages
 ```
 
 ### `/harness`
